@@ -41,7 +41,7 @@ public:
 
 	constexpr auto toIntegerRect() const requires (Float<A>) {
 
-		using Int = TT::ToInteger<A>;
+		using Int = TT::ToSizedInteger<A>;
 
 		Int nx = static_cast<Int>(Math::floor(x));
 		Int ny = static_cast<Int>(Math::floor(y));

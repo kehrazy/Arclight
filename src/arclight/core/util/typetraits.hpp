@@ -111,47 +111,27 @@ namespace TT {
 			constexpr static bool Value = (std::is_same_v<T, Pack> && ...);
 		};
 
-		template<Arithmetic A>
-		struct ToInteger {
+		template<class T>
+		struct ToSizedInteger {
 
-			constexpr static SizeT Size = sizeof(A);
+			constexpr static SizeT Size = sizeof(T);
 
-			using Type =    TT::Conditional<!Float<A>, A,
+			using Type =    TT::Conditional<Integral<T>, T,
+							TT::Conditional<Size == 1, i8,
+							TT::Conditional<Size == 2, i16,
 							TT::Conditional<Size <= 4, i32,
-							TT::Conditional<Size <= 8, i64, imax>>>;
+							TT::Conditional<Size <= 8, i64, imax>>>>>;
 
 		};
 
-		template<Arithmetic A>
-		struct ToFloat {
+		template<class T>
+		struct ToSizedFloat {
 
-			constexpr static SizeT Size = sizeof(A);
+			constexpr static SizeT Size = sizeof(T);
 
-			using Type =	TT::Conditional<Float<A>, A,
+			using Type =	TT::Conditional<Float<T>, T,
 							TT::Conditional<Size <= sizeof(float), float,
 							TT::Conditional<Size <= sizeof(double), double, long double>>>;
-
-		};
-		template<> struct ToFloat<u64> { using Type = double; };
-		template<> struct ToFloat<i64> { using Type = double; };
-
-		template<class T>
-		concept HasExposedInnerType = requires { T::Type; };
-
-		template<class T>
-		struct CommonArithmeticType {};
-
-		template<class T> requires(HasExposedInnerType<T>)
-		struct CommonArithmeticType<T> {
-
-			using Type = typename T::Type;
-
-		};
-
-		template<Arithmetic T>
-		struct CommonArithmeticType<T> {
-
-			using Type = T;
 
 		};
 
@@ -177,6 +157,23 @@ namespace TT {
 							TT::Conditional<Size <= 4, i32,
 							TT::Conditional<Size <= 8, i64, imax>>>>;
 
+		};
+
+
+		template<class T>
+		concept HasExposedInnerType = requires { T::Type; };
+
+		template<class T>
+		struct CommonArithmeticType {};
+
+		template<class T> requires (HasExposedInnerType<T>)
+		struct CommonArithmeticType<T> {
+			using Type = typename T::Type;
+		};
+
+		template<Arithmetic T>
+		struct CommonArithmeticType<T> {
+			using Type = T;
 		};
 
 
@@ -240,12 +237,13 @@ namespace TT {
 	using ConditionalConst = std::conditional_t<B, const T, T>;
 
 
-	/* Converts an Integer type to a roughly equivalent Float type */
-	template<Arithmetic A>
-	using ToInteger = typename Detail::ToInteger<A>::Type;
+	/* Converts a type to a sized equivalent Integer type */
+	template<class T>
+	using ToSizedInteger = typename Detail::ToSizedInteger<T>::Type;
 
-	template<Arithmetic A>
-	using ToFloat = typename Detail::ToFloat<A>::Type;
+	/* Converts a type to a sized equivalent Float type */
+	template<class T>
+	using ToSizedFloat = typename Detail::ToSizedFloat<T>::Type;
 
 
 	/* Defines the corresponding integral type fitting at least the given amount of bytes */
