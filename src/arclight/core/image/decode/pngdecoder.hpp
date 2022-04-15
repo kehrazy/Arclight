@@ -3,22 +3,23 @@
  *
  *	 This file is part of Arclight. All rights reserved.
  *
- *	 qoidecoder.hpp
+ *	 pngdecoder.hpp
  */
 
 #pragma once
 
 #include "decoder.hpp"
+#include "bitmap.hpp"
 #include "image/image.hpp"
 #include "stream/binaryreader.hpp"
 
 
 
-class QOIDecoder : public IImageDecoder {
+class PNGDecoder : public IImageDecoder {
 
 public:
 
-	QOIDecoder() : validDecode(false) {}
+	PNGDecoder() : validDecode(false) {}
 
 	void decode(std::span<const u8> data);
 
@@ -38,5 +39,13 @@ private:
 	BinaryReader reader;
 	RawImage image;
 	bool validDecode;
+
+	u32 width;
+	u32 height;
+	u8 bitDepth;
+	u8 colorType;
+	u8 compressionMethod;
+	u8 filterMethod;
+	u8 interlaceMethod;
 
 };
