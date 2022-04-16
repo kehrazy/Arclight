@@ -48,4 +48,6 @@ private:
 	u8 filterMethod;
 	u8 interlaceMethod;
 
+	PixelRGB8 palette[256];
+
 };

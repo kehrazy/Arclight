@@ -57,7 +57,7 @@ void QOIDecoder::decode(std::span<const u8> data) {
 
 			u8 tag = reader.read<u8>();
 
-			if (tag == 0xff) {
+			if (tag == 0xFF) {
 
 				if (reader.remainingSize() < 4) {
 					throw ImageDecoderException("QOI stream size too small");
@@ -72,7 +72,7 @@ void QOIDecoder::decode(std::span<const u8> data) {
 
 				palette[hash(prevP.getRed(), prevP.getGreen(), prevP.getBlue(), prevP.getAlpha())] = prevP;
 
-			} else if (tag == 0xfe) {
+			} else if (tag == 0xFE) {
 
 				if (reader.remainingSize() < 3) {
 					throw ImageDecoderException("QOI stream size too small");
