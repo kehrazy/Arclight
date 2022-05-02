@@ -6,9 +6,12 @@
  *	 pngdecoder.cpp
  */
 
+#include <vector>
+#include "compression/deflate.hpp"
 #include "pngdecoder.hpp"
 #include "math/math.hpp"
 #include "debug.hpp"
+
 
 
 constexpr static u32 crc32LUT[256] {
@@ -80,6 +83,15 @@ constexpr static u8 bitCountLUT[256] {
 
 
 
+enum ChunkTypes {
+	IHDR = 0x49484452,
+	PLTE = 0x504C5445,
+	IDAT = 0x49444154,
+	IEND = 0x49454E44
+};
+
+
+
 void PNGDecoder::decode(std::span<const u8> data) {
 
 	validDecode = false;
@@ -103,6 +115,11 @@ void PNGDecoder::decode(std::span<const u8> data) {
 	bool seenIDAT = false;
 	bool seenIEND = false;
 
+	bool lockIDAT = false;
+	bool first = true;
+
+	std::vector<u8> compressedData;
+
 	while (true) {
 
 		if (reader.remainingSize() < 8) {
@@ -110,8 +127,6 @@ void PNGDecoder::decode(std::span<const u8> data) {
 		}
 
 		u32 len = reader.read<u32>();
-
-		ArcDebug() << ArcHex << len;
 
 		if (len > (1 << 31)) {
 			throw ImageDecoderException("PNG Chunk data field to long");
@@ -126,20 +141,49 @@ void PNGDecoder::decode(std::span<const u8> data) {
 		u32 sum2 = reader.read<u32>();
 		reader.seekTo(pos);
 
-		ArcDebug() << "Checksum: " << ArcHex << sum;
-
 		if (sum != sum2) {
 			throw ImageDecoderException("PNG Checksum mismatch");
 		}
 
 		u32 type = reader.read<u32>();
 
-		switch (type & 0xDFDFDFDF) {
+		if (first && type != IHDR) {
+			throw ImageDecoderException("PNG No IHDR chunk found");
+		}
 
-			// IHDR
-			case 0x49484452:
+		if (seenIDAT) {
 
-				Log::debug("PNG Loader", "Parsing IHDR chunk");
+			if (type == IDAT) {
+
+				if (lockIDAT) {
+					throw ImageDecoderException("PNG Invalid occurrence of IDAT chunk");
+				}
+
+			} else {
+				lockIDAT = true;
+			}
+
+		}
+
+		first = false;
+
+		char name[5] = {};
+
+		u32 bufType = Bits::swap32(type);
+
+		memcpy(name, &bufType, 4);
+
+		Log::debug("PNG Loader", "/====Parsing %s chunk====", name);
+		Log::debug("PNG Loader", "| Checksum: 0x%08X", sum);
+		Log::debug("PNG Loader", "| Length:   0x%08X (%i)", len, len);
+
+		switch (type) {
+
+			case IHDR:
+
+				if (seenIHDR) {
+					throw ImageDecoderException("PNG Invalid occurrence of IHDR chunk");
+				}
 
 				width = reader.read<u32>();
 				height = reader.read<u32>();
@@ -191,15 +235,22 @@ void PNGDecoder::decode(std::span<const u8> data) {
 					throw ImageDecoderException("PNG Faulty bit depth");
 				}
 
+				Log::debug("PNG Loader", "|");
+				Log::debug("PNG Loader", "| Width:  0x%08X (%i)", width, width);
+				Log::debug("PNG Loader", "| Height: 0x%08X (%i)", height, height);
+				Log::debug("PNG Loader", "| Bit Depth:       %i", bitDepth);
+				Log::debug("PNG Loader", "| Color Type:      %i", colorType);
+				Log::debug("PNG Loader", "| Compression:     %i", compressionMethod);
+				Log::debug("PNG Loader", "| Filter:          %i", filterMethod);
+				Log::debug("PNG Loader", "| Interlace:       %i", interlaceMethod);
+
 				seenIHDR = true;
 
 				break;
 
-			// PLTE
-			case 0x504C5445:
+			case PLTE:
 
-				Log::debug("PNG Loader", "Parsing PLTE chunk");
-
+				Log::debug("PNG Loader", "|");
 				if (!seenIHDR || seenPLTE || seenIDAT || colorType == 0 || colorType == 4) {
 					throw ImageDecoderException("PNG Invalid occurrence of PLTE chunk");
 				}
@@ -214,51 +265,79 @@ void PNGDecoder::decode(std::span<const u8> data) {
 					palette[i].setGreen(reader.read<u8>());
 					palette[i].setBlue(reader.read<u8>());
 
+					Log::debug("PNG Loader", "| Entry     0x%02x: (0x%02x, 0x%02x, 0x%02x)", i, palette[i].getRed(), palette[i].getGreen(), palette[i].getBlue());
+
 				}
 
 				seenPLTE = true;
 
 				break;
 
-			// IDAT
-			case 0x49444154:
+			case IDAT:
+				{
 
-				Log::debug("PNG Loader", "Parsing IDAT chunk");
+					pos = reader.position();
 
-				reader.seekTo(reader.position() + len);
+					u64 backIndex = compressedData.size();
+					compressedData.resize(compressedData.size() + len);
+					reader.read(std::span{ compressedData.data() + backIndex, len });
 
-				seenIDAT = true;
+					seenIDAT = true;
+
+				}
 
 				break;
+			case IEND: {
 
-			// IEND
-			case 0x49454E44:
+				reader.seek(len);
 
-				Log::debug("PNG Loader", "Parsing IEND chunk");
+				if (compressedData.size() < 6) {
+					throw ImageDecoderException("PNG Too little compressed data");
+				}
 
-				reader.seekTo(reader.position() + len);
+				u8 CMF = compressedData[0];
+				u8 FLG = compressedData[1];
+
+				if ((CMF & 0xF) > 7) {
+					throw ImageDecoderException("PNG ZLib Compression method invalid");
+				}
+
+				if (CMF >> 4 != 8) {
+					throw ImageDecoderException("PNG ZLib LZSS window too large");
+				}
+
+				if (CMF * 256 + FLG % 31) {
+					throw ImageDecoderException("PNG ZLib FCHECK invalid");
+				}
+
+				if (FLG >> 5) {
+					throw ImageDecoderException("PNG ZLib Preset dictionaries not supported");
+				}
+
+				deflate(std::span{ compressedData.data() + 2, compressedData.size() - 6 });
 
 				seenIEND = true;
 
 				break;
 
+			}
+
 			default:
 
-				Log::debug("PNG Loader", "Unsupported chunk, skipping");
+				if (!(type & (1 << 29))) {
+					throw ImageDecoderException("PNG Unsupported critical chunk");
+				}
 
-				char name[5] = {};
-
-				type = Bits::swap32(type);
-
-				memcpy(name, &type, 4);
-
-				ArcDebug() << name;
+				Log::debug("PNG Loader", "|");
+				Log::debug("PNG Loader", "| Unsupported chunk, skipping");
 
 				reader.seekTo(reader.position() + len);
 
 				break;
 
 		}
+
+		Log::debug("PNG Loader", "\\==========================\n\n");
 
 		reader.read<u32>();
 
