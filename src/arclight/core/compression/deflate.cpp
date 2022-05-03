@@ -8,8 +8,15 @@
 
 #include "deflate.hpp"
 #include "util/log.hpp"
+#include "debug.hpp"
 
 
+
+//constexpr u8 r3b(std::span<const u8>& data, u64 pos) {
+//
+//}
+
+constexpr u8 shuffle[19] = { 16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15 };
 
 std::vector<u8> Compress::deflate(std::span<const u8> data) {
 	u64 pos = 0;
@@ -33,7 +40,8 @@ std::vector<u8> Compress::deflate(std::span<const u8> data) {
 
 		switch (type) {
 		case 2: {
-			u8 HLIT, HDIST, HCLEN;
+			u16 HLIT;
+			u8 HDIST, HCLEN;
 
 			switch (pos % 8) {
 			case 0:
@@ -86,7 +94,28 @@ std::vector<u8> Compress::deflate(std::span<const u8> data) {
 				break;
 			}
 
+			HLIT += 257;
+			HDIST += 1;
+			HCLEN += 4;
+
 			Log::debug("DEFLATE", "HLIT: %i, HDIST: %i, HCLEN: %i", HLIT, HDIST, HCLEN);
+
+			u8 CLCodeLengths[19] = { 0 };
+
+			for (u32 i = 0; i < HCLEN; i++) {
+				if (pos % 8 < 6) {
+					CLCodeLengths[shuffle[i]] = (data[pos/8] >> (pos % 8)) & 0x7;
+				} else if (pos % 8 == 6) {
+					CLCodeLengths[shuffle[i]] = (data[pos/8] >> 6) + ((data[pos/8 + 1] & 0x1) << 2);
+				} else {
+					CLCodeLengths[shuffle[i]] = (data[pos/8] >> 7) + ((data[pos/8 + 1] & 0x3) << 1);
+				}
+				pos += 3;
+			}
+
+			for (u32 i = 0; i < 19; i++) {
+				Log::debug("DEFLATE", "%2i: %i (%i)", i, CLCodeLengths[i], CLCodeLengths[shuffle[i]]);
+			}
 
 			break;
 
