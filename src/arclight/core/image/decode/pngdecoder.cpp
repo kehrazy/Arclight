@@ -298,23 +298,23 @@ void PNGDecoder::decode(std::span<const u8> data) {
 				u8 CMF = compressedData[0];
 				u8 FLG = compressedData[1];
 
-				if ((CMF & 0xF) > 7) {
+				if ((CMF & 0xF) != 8) {
 					throw ImageDecoderException("PNG ZLib Compression method invalid");
 				}
 
-				if (CMF >> 4 != 8) {
+				if ((CMF >> 4) > 7) {
 					throw ImageDecoderException("PNG ZLib LZSS window too large");
 				}
 
-				if (CMF * 256 + FLG % 31) {
+				if ((CMF * 256 + FLG) % 31) {
 					throw ImageDecoderException("PNG ZLib FCHECK invalid");
 				}
 
-				if (FLG >> 5) {
+				if ((FLG >> 5) & 0x1) {
 					throw ImageDecoderException("PNG ZLib Preset dictionaries not supported");
 				}
 
-				deflate(std::span{ compressedData.data() + 2, compressedData.size() - 6 });
+				Compress::deflate(std::span{ compressedData.data() + 2, compressedData.size() - 6 });
 
 				seenIEND = true;
 

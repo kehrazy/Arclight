@@ -12,4 +12,8 @@
 #include <span>
 #include "types.hpp"
 
-std::vector<u8> deflate(std::span<u8> data);
+namespace Compression {
+	std::vector<u8> deflate(std::span<const u8> data);
+}
+
+namespace Compress = Compression;
