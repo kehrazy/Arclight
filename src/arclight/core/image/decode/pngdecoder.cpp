@@ -314,7 +314,7 @@ void PNGDecoder::decode(std::span<const u8> data) {
 					throw ImageDecoderException("PNG ZLib Preset dictionaries not supported");
 				}
 
-				Compress::deflate(std::span{ compressedData.data() + 2, compressedData.size() - 6 });
+				Compress::inflate(std::span{ compressedData.data() + 2, compressedData.size() - 6 });
 
 				seenIEND = true;
 

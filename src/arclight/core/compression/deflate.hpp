@@ -10,10 +10,18 @@
 
 #include <vector>
 #include <span>
+#include <stdexcept>
 #include "types.hpp"
 
 namespace Compression {
-	std::vector<u8> deflate(std::span<const u8> data);
+	std::vector<u8> inflate(std::span<const u8> data);
 }
+
+class CompressorException : public std::runtime_error {
+
+public:
+	explicit CompressorException(const std::string& msg) : std::runtime_error(msg) {}
+
+};
 
 namespace Compress = Compression;
