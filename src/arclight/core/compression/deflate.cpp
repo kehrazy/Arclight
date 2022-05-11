@@ -9,6 +9,7 @@
 #include "deflate.hpp"
 #include "util/log.hpp"
 #include "debug.hpp"
+#include "util/bits.hpp"
 
 
 
@@ -34,11 +35,11 @@ constexpr u8 rev7b[128] = {
 };
 
 static u8 CLCodeLengths[19] = {};
-static u8 CLCodeLUT[128];
+static u32 CLCodeLUT[0x80];
 
 
 
-void readCLCodes(std::span<const u8>& data, u64& pos, u32 numCodes, u8* CodeLengths) {
+void readCodeLengths(std::span<const u8>& data, u64& pos, u32 numCodes, u8* CodeLengths) {
 	for (u32 i = 0; i < numCodes; i++) {
 		u32 code;
 
@@ -140,7 +141,44 @@ void readCLCodes(std::span<const u8>& data, u64& pos, u32 numCodes, u8* CodeLeng
 		ArcDebug() << code << CLCodeLUT[code] << rLen;
 
 	}
-	
+
+}
+
+
+
+void genCodesFromLengths(u32 numBits, u32 numCodes, const u8* CodeLengths, u32* CodeLUT) {
+
+	u32 code = 0;
+	u32 blCount[286] = {};
+	u32 nextCode[286] = {};
+
+	for (u32 i = 0; i < numCodes; i++) {
+		blCount[CodeLengths[i]]++;
+	}
+
+	for (u32 bits = 0; bits < numBits; bits++) {
+
+		code = (code + blCount[bits + 1]) << 1;
+		nextCode[bits + 1] = code;
+
+	}
+
+	for (u32 n = 0; n < numCodes; n++) {
+
+		u32 len = CodeLengths[n];
+
+		if (len != 0) {
+
+			for (u32 i = 0; i < 1 << (numBits - len); i++) {
+//				ArcDebug() << "  " << (nextCode[len - 1] << (numBits - len)) + i << n;
+				CodeLUT[(nextCode[len - 1] << (numBits - len)) + i] = n;
+			}
+			nextCode[len - 1]++;
+
+		}
+
+	}
+
 }
 
 
@@ -241,12 +279,12 @@ std::vector<u8> Compress::inflate(std::span<const u8> data) {
 
 			Log::debug("DEFLATE", "HLIT: %i, HDIST: %i, HCLEN: %i", HLIT, HDIST, HCLEN);
 
+			if (pos + 3 * HCLEN >= data.size() * 8) {
+				throw CompressorException("INFLATE input too small");
+			}
+
 			// Read CL Code Lengths
 			for (u32 i = 0; i < HCLEN; i++) {
-
-				if (pos + 3 >= data.size() * 8) {
-					throw CompressorException("INFLATE input too small");
-				}
 
 				if (pos % 8 < 6) {
 					CLCodeLengths[shuffle[i]] = (data[pos/8] >> (pos % 8)) & 0x7;
@@ -265,46 +303,22 @@ std::vector<u8> Compress::inflate(std::span<const u8> data) {
 			}
 
 			// Generate CL Codes
-			{
-
-				u16 code = 0;
-				u8 blCount[8] = {};
-				u16 nextCode[8] = {};
-
-				for (u8 CLCodeLength: CLCodeLengths) {
-					blCount[CLCodeLength]++;
-				}
-
-				for (u32 bits = 0; bits < 7; bits++) {
-
-					code = (code + blCount[bits + 1]) << 1;
-					nextCode[bits + 1] = code;
-
-				}
-
-				for (u32 n = 0; n < 19; n++) {
-
-					u32 len = CLCodeLengths[n];
-
-					if (len != 0) {
-
-						for (u32 i = 0; i < 1 << (7 - len); i++) {
-							CLCodeLUT[(nextCode[len - 1] << (7 - len)) + i] = n;
-						}
-						nextCode[len - 1]++;
-
-					}
-
-				}
-
-			}
+			genCodesFromLengths(7, 19, CLCodeLengths, CLCodeLUT);
 
 			u8 LLCodeLengths[286] = {};
-			u8 DCodeLengths[33] = {};
+			u32 LLCodeLUT[0x8000];
+
+			u8 DistanceCodeLengths[33] = {};
+			u32 DistanceCodeLUT[0x8000];
 
 			// Use CL Codes to read LL and Distance Code Lengths
-			readCLCodes(data, pos, HLIT, LLCodeLengths);
-			readCLCodes(data, pos, HDIST, DCodeLengths);
+			readCodeLengths(data, pos, HLIT, LLCodeLengths);
+			readCodeLengths(data, pos, HDIST, DistanceCodeLengths);
+
+			genCodesFromLengths(15, 286, LLCodeLengths, LLCodeLUT);
+			genCodesFromLengths(15, 33, DistanceCodeLengths, DistanceCodeLUT);
+
+			pos++;
 
 			break;
 
