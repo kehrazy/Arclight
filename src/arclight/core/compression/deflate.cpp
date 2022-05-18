@@ -318,6 +318,54 @@ std::vector<u8> Compress::inflate(std::span<const u8> data) {
 			genCodesFromLengths(15, 286, LLCodeLengths, LLCodeLUT);
 			genCodesFromLengths(15, 33, DistanceCodeLengths, DistanceCodeLUT);
 
+			ArcDebug() << pos;
+
+			if (pos + 15 >= data.size() * 8) {
+				throw CompressorException("INFLATE input too small");
+			}
+
+			for (u32 i = 0; i < 3; i++) {
+				u16 code;
+
+				switch (pos % 8) {
+				case 0:
+					code = Bits::reverse<u16>((data[pos/8] << 1) + (data[pos/8 + 1] << 9));
+					break;
+
+				case 1:
+					code = Bits::reverse<u16>((data[pos/8] & 0xFE) + (data[pos/8 + 1] << 8));
+					break;
+
+				case 2:
+					code = Bits::reverse<u16>(((data[pos/8] & 0xFC) >> 1) + (data[pos/8 + 1] << 7) + (data[pos/8 + 2] << 15));
+					break;
+
+				case 3:
+					code = Bits::reverse<u16>(((data[pos/8] & 0xF8) >> 2) + (data[pos/8 + 1] << 6) + (data[pos/8 + 2] << 14));
+					break;
+
+				case 4:
+					code = Bits::reverse<u16>(((data[pos/8] & 0xF0) >> 3) + (data[pos/8 + 1] << 5) + (data[pos/8 + 2] << 13));
+					break;
+
+				case 5:
+					code = Bits::reverse<u16>(((data[pos/8] & 0xE0) >> 4) + (data[pos/8 + 1] << 4) + (data[pos/8 + 2] << 12));
+					break;
+
+				case 6:
+					code = Bits::reverse<u16>(((data[pos/8] & 0xC0) >> 5) + (data[pos/8 + 1] << 3) + (data[pos/8 + 2] << 11));
+					break;
+
+				case 7:
+					code = Bits::reverse<u16>(((data[pos/8] & 0x80) >> 6) + (data[pos/8 + 1] << 2) + (data[pos/8 + 2] << 10));
+					break;
+				}
+
+				ArcDebug() << pos % 8 << ArcHex << code << LLCodeLUT[code] << LLCodeLengths[LLCodeLUT[code]];
+
+				pos += LLCodeLengths[LLCodeLUT[code]];
+			}
+
 			pos++;
 
 			break;
