@@ -11,7 +11,22 @@
 #include "noisebase.hpp"
 
 
-template<CC::NoiseType... Types>
+namespace CC {
+
+	namespace Detail {
+
+		template<class T>
+		struct NoiseMixable;
+
+	}
+
+	template<class T>
+	concept NoiseMixable = Detail::NoiseMixable<T>::Value;
+
+}
+
+
+template<CC::NoiseMixable... Types>
 class NoiseMix {
 
 	template<class T, class... Pack>
@@ -20,6 +35,16 @@ class NoiseMix {
 public:
 
 	static constexpr u32 TypesCount = sizeof...(Types);
+
+	static constexpr u32 MixesCount = []() constexpr {
+
+		u32 count = 0;
+
+		return ((count += CC::NoiseType<Types> ? 0 : 1), ...);
+
+	}();
+
+	static constexpr bool Recursive = MixesCount != 0;
 
 	static_assert(TypesCount > 1, "Cannot mix less than 2 noise types");
 
@@ -49,29 +74,29 @@ public:
 	}
 
 
-	template<CC::FloatParam T, CC::Arithmetic A, CC::Arithmetic L = u32, CC::Arithmetic P = u32, CC::Float F = TT::CommonArithmeticType<T>>
-	constexpr F sample(const T& point, A frequency, u32 octaves = 1, L lacunarity = 1, P persistence = 1) const {
+	template<CC::FloatParam T, CC::Arithmetic A, CC::Arithmetic L, CC::Arithmetic P, CC::Float F = TT::CommonArithmeticType<T>>
+	constexpr F sample(const T& point, const NoiseParams<A, L, P>& params) const {
 
 		F sample;
 
 		std::apply([&](const auto&... args) constexpr {
-			sample = (args.sample(point, frequency, octaves, lacunarity, persistence) + ...);
+			sample = (args.sample(point, params) + ...);
 		}, types);
 
 		return sample / TypesCount;
 
 	}
 
-	template<CC::Arithmetic C, SizeT N, CC::FloatParam T, CC::Arithmetic A, CC::Arithmetic L = u32, CC::Arithmetic P = u32, CC::Float F = TT::CommonArithmeticType<T>>
-	constexpr F sample(ContributionT<C, N> contribution, const T& point, A frequency, u32 octaves = 1, L lacunarity = 1, P persistence = 1) const {
+	template<CC::FloatParam T, CC::Arithmetic A, CC::Arithmetic L, CC::Arithmetic P, CC::Float F = TT::CommonArithmeticType<T>, CC::Arithmetic C, SizeT N> requires(!Recursive)
+	constexpr F sample(const T& point, const NoiseParams<A, L, P>& params, ContributionT<C, N> contribution) const {
 
 		F sample = 0;
 
 		auto calculate = [&](const auto& type, u32 idx) constexpr {
 
-			F c = (idx == 0) ? 1 : contribution[idx - 1];
+			F scale = (idx == 0) ? 1 : contribution[idx - 1];
 
-			sample += type.sample(point, frequency, octaves, lacunarity, persistence) * c;
+			sample += type.sample(point, params) * scale;
 
 			if (idx != TypesCount - 1) {
 				sample *= (1 - contribution[idx]);
@@ -88,13 +113,13 @@ public:
 
 	}
 
-	template<CC::FloatParam T, CC::Arithmetic A, CC::Arithmetic L = u32, CC::Arithmetic P = u32, CC::Float F = TT::CommonArithmeticType<T>, CC::Returns<F, ArgsHelper<F, Types>...> Func>
-	constexpr F sample(Func&& transform, const T& point, A frequency, u32 octaves = 1, L lacunarity = 1, P persistence = 1) const {
+	template<CC::FloatParam T, CC::Arithmetic A, CC::Arithmetic L, CC::Arithmetic P, CC::Float F = TT::CommonArithmeticType<T>, CC::Returns<F, ArgsHelper<F, Types>...> Func> requires(!Recursive)
+	constexpr F sample(const T& point, const NoiseParams<A, L, P>& params, Func&& transform) const {
 
 		F sample;
 
 		std::apply([&](const auto&... args) constexpr {
-			sample = transform(args.sample(point, frequency, octaves, lacunarity, persistence)...);
+			sample = transform(args.sample(point, params)...);
 		}, types);
 
 		return sample;
@@ -102,10 +127,8 @@ public:
 	}
 
 
-	template<CC::FloatParam T, CC::Arithmetic A, CC::Arithmetic L = u32, CC::Arithmetic P = u32, CC::Float F = TT::CommonArithmeticType<T>>
-	constexpr std::vector<F> sample(std::span<const T> points, std::span<const A> frequencies, u32 octaves = 1, L lacunarity = 1, P persistence = 1) const {
-
-		arc_assert(points.size() == frequencies.size(), "The amount of points need to match the amount of frequencies");
+	template<CC::FloatParam T, CC::Arithmetic A, CC::Arithmetic L, CC::Arithmetic P, CC::Float F = TT::CommonArithmeticType<T>>
+	constexpr std::vector<F> sample(std::span<const T> points, const NoiseParams<A, L, P>& params) const {
 
 		const u32 count = points.size();
 
@@ -113,7 +136,7 @@ public:
 
 		auto calculate = [&](const auto& type) constexpr {
 
-			std::vector<F> samples = type.sample(points, frequencies, octaves, lacunarity, persistence);
+			std::vector<F> samples = type.sample(points, params);
 
 			for (u32 i = 0; i < count; i++) {
 				out[i] += samples[i];
@@ -133,10 +156,8 @@ public:
 
 	}
 
-	template<CC::Arithmetic C, SizeT N, CC::FloatParam T, CC::Arithmetic A, CC::Arithmetic L = u32, CC::Arithmetic P = u32, CC::Float F = TT::CommonArithmeticType<T>>
-	constexpr std::vector<F> sample(ContributionT<C, N> contribution, std::span<const T> points, std::span<const A> frequencies, u32 octaves = 1, L lacunarity = 1, P persistence = 1) const {
-
-		arc_assert(points.size() == frequencies.size(), "The amount of points need to match the amount of frequencies");
+	template<CC::FloatParam T, CC::Arithmetic A, CC::Arithmetic L, CC::Arithmetic P, CC::Float F = TT::CommonArithmeticType<T>, CC::Arithmetic C, SizeT N> requires(!Recursive)
+	constexpr std::vector<F> sample(std::span<const T> points, const NoiseParams<A, L, P>& params, ContributionT<C, N> contribution) const {
 
 		const u32 count = points.size();
 
@@ -146,7 +167,7 @@ public:
 
 			F scale = (idx == 0) ? 1 : contribution[idx - 1];
 
-			std::vector<F> samples = type.sample(points, frequencies, octaves, lacunarity, persistence);
+			std::vector<F> samples = type.sample(points, params);
 
 			for (u32 i = 0; i < count; i++) {
 
@@ -168,10 +189,8 @@ public:
 
 	}
 
-	template<CC::FloatParam T, CC::Arithmetic A, CC::Arithmetic L = u32, CC::Arithmetic P = u32, CC::Float F = TT::CommonArithmeticType<T>, CC::Returns<F, ArgsHelper<F, Types>...> Func>
-	constexpr std::vector<F> sample(Func&& transform, std::span<const T> points, std::span<const A> frequencies, u32 octaves = 1, L lacunarity = 1, P persistence = 1) const {
-
-		arc_assert(points.size() == frequencies.size(), "The amount of points need to match the amount of frequencies");
+	template<CC::FloatParam T, CC::Arithmetic A, CC::Arithmetic L, CC::Arithmetic P, CC::Float F = TT::CommonArithmeticType<T>, CC::Returns<F, ArgsHelper<F, Types>...> Func> requires(!Recursive)
+	constexpr std::vector<F> sample(std::span<const T> points, const NoiseParams<A, L, P>& params, Func&& transform) const {
 
 		const u32 count = points.size();
 
@@ -186,7 +205,7 @@ public:
 		};
 
 		std::apply([&](const auto&... args) constexpr {
-			calculate(args.sample(points, frequencies, octaves, lacunarity, persistence)...);
+			calculate(args.sample(points, params)...);
 		}, types);
 
 		return out;
@@ -198,3 +217,23 @@ private:
 	std::tuple<Types...> types;
 
 };
+
+
+namespace CC::Detail {
+
+	template<class T>
+	struct NoiseMixable {
+		constexpr static bool Value = false;
+	};
+
+	template<NoiseType T>
+	struct NoiseMixable<T> {
+		constexpr static bool Value = true;
+	};
+
+	template<class... Types>
+	struct NoiseMixable<NoiseMix<Types...>> {
+		constexpr static bool Value = true;
+	};
+
+}
