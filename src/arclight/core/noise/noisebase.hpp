@@ -23,6 +23,18 @@ enum class NoiseFractal {
 };
 
 
+template<CC::Arithmetic F, CC::Arithmetic L = u32, CC::Arithmetic P = u32>
+struct NoiseParams {
+
+	constexpr bool operator==(const NoiseParams&) const noexcept = default;
+
+	F frequency = 1;
+	u32 octaves = 1;
+	L lacunarity = 1;
+	P persistence = 1;
+};
+
+
 class NoiseBase {
 
 public:
@@ -59,12 +71,12 @@ protected:
 
 	}
 
-	template<NoiseFractal Fractal, CC::FloatParam T, CC::Arithmetic A, CC::Arithmetic L, CC::Arithmetic P, CC::Invocable<T, A> Func>
-	static constexpr TT::CommonArithmeticType<T> fractalSample(Func&& func, const T& point, A frequency, u32 octaves, L lacunarity, P persistence) {
+	template<NoiseFractal Fractal, CC::FloatParam T, CC::Arithmetic A, CC::Arithmetic L, CC::Arithmetic P, CC::Float F = TT::CommonArithmeticType<T>>
+	static constexpr F fractalSample(auto&& func, const T& point, const NoiseParams<A, L, P>& params) {
+
+		auto [frequency, octaves, lacunarity, persistence] = params;
 
 		arc_assert(octaves >= 1, "Octaves count cannot be 0");
-
-		using F = TT::CommonArithmeticType<T>;
 
 		if (octaves == 1) {
 			return func(point, frequency);
@@ -95,14 +107,16 @@ protected:
 
 	}
 
-	template<NoiseFractal Fractal, CC::FloatParam T, CC::Arithmetic A, CC::Arithmetic L, CC::Arithmetic P, CC::Invocable<T, A> Func, CC::Float F = TT::CommonArithmeticType<T>>
-	static constexpr std::vector<F> fractalSample(Func&& func, std::span<const T> points, std::span<const A> frequencies, u32 octaves, L lacunarity, P persistence) {
+	template<NoiseFractal Fractal, CC::FloatParam T, CC::Arithmetic A, CC::Arithmetic L, CC::Arithmetic P, CC::Float F = TT::CommonArithmeticType<T>>
+	static constexpr std::vector<F> fractalSample(auto&& func, std::span<const T> points, const NoiseParams<A, L, P>& params) {
+
+		auto [frequency, octaves, lacunarity, persistence] = params;
 
 		arc_assert(octaves >= 1, "Octaves count cannot be 0");
-		arc_assert(points.size() == frequencies.size(), "The amount of points need to match the amount of frequencies");
+		arc_assert(points.size() >= 0, "Points count cannot be 0");
 
 		if (octaves == 1) {
-			return func(points, frequencies);
+			return func(points, frequency);
 		}
 
 		arc_force_assert("Fractal span sampling not yet supported");

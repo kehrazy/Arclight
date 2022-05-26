@@ -155,6 +155,26 @@ namespace TT {
 
 		};
 
+		template<class T>
+		concept HasExposedSize = requires { T::Size; };
+
+		template<class T>
+		struct ArithmeticSize {};
+
+		template<class T> requires(HasExposedSize<T>)
+		struct ArithmeticSize<T> {
+
+			SizeT Value = T::Size;
+
+		};
+
+		template<CC::Arithmetic T>
+		struct ArithmeticSize<T> {
+
+			SizeT Value = 1;
+
+		};
+
 		template<SizeT Size>
 		struct UnsignedFromSize {
 
@@ -259,6 +279,9 @@ namespace TT {
 	/* Extracts the arithmetic type from a mathematical construct T or uses the arithmetic type T */
 	template<class T>
 	using CommonArithmeticType = typename Detail::CommonArithmeticType<T>::Type;
+
+	template<class T>
+	constexpr inline SizeT ArithmeticSize = Detail::ArithmeticSize<T>::Value;
 
 
 	/* Specialized traits */

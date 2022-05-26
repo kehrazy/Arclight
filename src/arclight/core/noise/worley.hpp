@@ -26,14 +26,14 @@ public:
 	using FlagT = WorleyNoiseFlag;
 
 
-	template<CC::FloatParam T, CC::Arithmetic A, CC::Arithmetic L = u32, CC::Arithmetic P = u32>
-	constexpr TT::CommonArithmeticType<T> sample(const T& point, A frequency, u32 octaves = 1, L lacunarity = 1, P persistence = 1) const {
-		return fractalSample<Fractal>([this](const T& p, A f) constexpr { return raw(p, f); }, point, frequency, octaves, lacunarity, persistence);
+	template<CC::FloatParam T, CC::Arithmetic A, CC::Arithmetic L, CC::Arithmetic P>
+	constexpr TT::CommonArithmeticType<T> sample(const T& point, const NoiseParams<A, L, P>& params) const {
+		return fractalSample<Fractal>([this](const T& p, A f) constexpr { return raw(p, f); }, point, params);
 	}
 
-	template<CC::FloatParam T, CC::Arithmetic A, CC::Arithmetic L = u32, CC::Arithmetic P = u32, CC::Float F = TT::CommonArithmeticType<T>>
-	constexpr std::vector<F> sample(std::span<const T> points, std::span<const A> frequencies, u32 octaves = 1, L lacunarity = 1, P persistence = 1) const {
-		return fractalSample<Fractal>([this](auto p, auto f) constexpr { return raw(p, f); }, points, frequencies, octaves, lacunarity, persistence);
+	template<CC::FloatParam T, CC::Arithmetic A, CC::Arithmetic L, CC::Arithmetic P, CC::Float F = TT::CommonArithmeticType<T>>
+	constexpr std::vector<F> sample(std::span<const T> points, const NoiseParams<A, L, P>& params) const {
+		return fractalSample<Fractal>([this](auto p, A f) constexpr { return raw(p, f); }, points, params);
 	}
 
 private:
@@ -56,7 +56,7 @@ private:
 
 		for (I ofs = -1; ofs <= 1; ofs++) {
 
-			u32 h = Math::abs(ip + ofs) & hashMask;
+			u32 h = ip + ofs & hashMask;
 
 			F g = gradient<F>[hash(h) & grad1DMask];
 
@@ -98,8 +98,8 @@ private:
 		for (I ofsx = -1; ofsx <= 1; ofsx++) {
 			for (I ofsy = -1; ofsy <= 1; ofsy++) {
 
-				u32 hx = Math::abs(ipx + ofsx) & hashMask;
-				u32 hy = Math::abs(ipy + ofsy) & hashMask;
+				u32 hx = ipx + ofsx & hashMask;
+				u32 hy = ipy + ofsy & hashMask;
 
 				auto [gx, gy] = gradient<V>[hash(hx, hy) & grad2DMask];
 
@@ -147,9 +147,9 @@ private:
 			for (I ofsy = -1; ofsy <= 1; ofsy++) {
 				for (I ofsz = -1; ofsz <= 1; ofsz++) {
 
-					u32 hx = Math::abs(ipx + ofsx) & hashMask;
-					u32 hy = Math::abs(ipy + ofsy) & hashMask;
-					u32 hz = Math::abs(ipz + ofsz) & hashMask;
+					u32 hx = ipx + ofsx & hashMask;
+					u32 hy = ipy + ofsy & hashMask;
+					u32 hz = ipz + ofsz & hashMask;
 
 					auto [gx, gy, gz] = gradient<V>[hash(hx, hy, hz) & grad3DMask];
 
@@ -203,10 +203,10 @@ private:
 				for (I ofsz = -1; ofsz <= 1; ofsz++) {
 					for (I ofsw = -1; ofsw <= 1; ofsw++) {
 
-						u32 hx = Math::abs(ipx + ofsx) & hashMask;
-						u32 hy = Math::abs(ipy + ofsy) & hashMask;
-						u32 hz = Math::abs(ipz + ofsz) & hashMask;
-						u32 hw = Math::abs(ipw + ofsw) & hashMask;
+						u32 hx = ipx + ofsx & hashMask;
+						u32 hy = ipy + ofsy & hashMask;
+						u32 hz = ipz + ofsz & hashMask;
+						u32 hw = ipw + ofsw & hashMask;
 
 						auto [gx, gy, gz, gw] = gradient<V>[hash(hx, hy, hz, hw) & grad3DMask];
 
@@ -231,12 +231,12 @@ private:
 
 
 	template<CC::FloatParam T, CC::Arithmetic A, CC::Float F = TT::CommonArithmeticType<T>>
-	constexpr std::vector<F> raw(std::span<const T> points, std::span<const A> frequencies) const {
+	constexpr std::vector<F> raw(std::span<const T> points, A frequency) const {
 
 		std::vector<F> samples;
 
 		for (u32 i = 0; i < points.size(); i++) {
-			samples.push_back(raw(points[i], frequencies[i]));
+			samples.push_back(raw(points[i], frequency));
 		}
 
 		return samples;
