@@ -26,20 +26,23 @@ public:
 	using FlagT = WorleyNoiseFlag;
 
 
+	constexpr WorleyNoiseBase() noexcept = default;
+
+
 	template<CC::FloatParam T, CC::Arithmetic A, CC::Arithmetic L, CC::Arithmetic P>
-	constexpr TT::CommonArithmeticType<T> sample(const T& point, const NoiseParams<A, L, P>& params) const {
+	constexpr TT::CommonArithmeticType<T> sample(const T& point, const NoiseParams<A, L, P>& params) const noexcept {
 		return fractalSample<Fractal>([this](const T& p, A f) constexpr { return raw(p, f); }, point, params);
 	}
 
 	template<CC::FloatParam T, CC::Arithmetic A, CC::Arithmetic L, CC::Arithmetic P, CC::Float F = TT::CommonArithmeticType<T>>
-	constexpr std::vector<F> sample(std::span<const T> points, const NoiseParams<A, L, P>& params) const {
+	constexpr std::vector<F> sample(std::span<const T> points, const NoiseParams<A, L, P>& params) const noexcept {
 		return fractalSample<Fractal>([this](auto p, A f) constexpr { return raw(p, f); }, points, params);
 	}
 
 private:
 
 	template<CC::Float F, CC::Arithmetic A>
-	constexpr F raw(F point, A frequency) const {
+	constexpr F raw(F point, A frequency) const noexcept {
 
 		using I = TT::ToInteger<F>;
 
@@ -74,7 +77,7 @@ private:
 	}
 
 	template<CC::FloatVector V, CC::Arithmetic A> requires(V::Size == 2)
-	constexpr typename V::Type raw(V point, A frequency) const {
+	constexpr typename V::Type raw(V point, A frequency) const noexcept {
 
 		using F = typename V::Type;
 		using I = TT::ToInteger<F>;
@@ -119,7 +122,7 @@ private:
 	}
 
 	template<CC::FloatVector V, CC::Arithmetic A> requires(V::Size == 3)
-	constexpr typename V::Type raw(V point, A frequency) const {
+	constexpr typename V::Type raw(V point, A frequency) const noexcept {
 
 		using F = typename V::Type;
 		using I = TT::ToInteger<F>;
@@ -171,7 +174,7 @@ private:
 	}
 
 	template<CC::FloatVector V, CC::Arithmetic A> requires(V::Size == 4)
-	constexpr typename V::Type raw(V point, A frequency) const {
+	constexpr typename V::Type raw(V point, A frequency) const noexcept {
 
 		using F = typename V::Type;
 		using I = TT::ToInteger<F>;
@@ -231,7 +234,7 @@ private:
 
 
 	template<CC::FloatParam T, CC::Arithmetic A, CC::Float F = TT::CommonArithmeticType<T>>
-	constexpr std::vector<F> raw(std::span<const T> points, A frequency) const {
+	constexpr std::vector<F> raw(std::span<const T> points, A frequency) const noexcept {
 
 		std::vector<F> samples;
 
@@ -244,7 +247,7 @@ private:
 
 
 	template<CC::Float F>
-	static constexpr void updateDistances(F& first, F& second, F dist) {
+	static constexpr void updateDistances(F& first, F& second, F dist) noexcept {
 		if constexpr (Flag == FlagT::None) {
 
 			first = Math::min(first, dist);
@@ -262,7 +265,7 @@ private:
 	}
 
 	template<CC::Float F>
-	static constexpr F applyFlag(F first, F second) {
+	static constexpr F applyFlag(F first, F second) noexcept {
 		if constexpr (Flag == FlagT::Second) {
 			return second;
 		} else if constexpr (Flag == FlagT::Diff) {

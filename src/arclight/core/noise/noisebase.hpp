@@ -39,7 +39,7 @@ class NoiseBase {
 
 public:
 
-	constexpr NoiseBase() : p(defaultP) {};
+	constexpr NoiseBase() noexcept : p(defaultP) {};
 
 
 	inline void permutate(u32 seed) {
@@ -54,7 +54,7 @@ public:
 protected:
 
 	template<NoiseFractal Fractal, CC::Float F>
-	static constexpr F applyFractal(F sample) {
+	static constexpr F applyFractal(F sample) noexcept {
 
 		if constexpr (Fractal != NoiseFractal::Standard) {
 
@@ -72,7 +72,7 @@ protected:
 	}
 
 	template<NoiseFractal Fractal, CC::FloatParam T, CC::Arithmetic A, CC::Arithmetic L, CC::Arithmetic P, CC::Float F = TT::CommonArithmeticType<T>>
-	static constexpr F fractalSample(auto&& func, const T& point, const NoiseParams<A, L, P>& params) {
+	static constexpr F fractalSample(auto&& func, const T& point, const NoiseParams<A, L, P>& params) noexcept {
 
 		auto [frequency, octaves, lacunarity, persistence] = params;
 
@@ -108,7 +108,7 @@ protected:
 	}
 
 	template<NoiseFractal Fractal, CC::FloatParam T, CC::Arithmetic A, CC::Arithmetic L, CC::Arithmetic P, CC::Float F = TT::CommonArithmeticType<T>>
-	static constexpr std::vector<F> fractalSample(auto&& func, std::span<const T> points, const NoiseParams<A, L, P>& params) {
+	static constexpr std::vector<F> fractalSample(auto&& func, std::span<const T> points, const NoiseParams<A, L, P>& params) noexcept {
 
 		auto [frequency, octaves, lacunarity, persistence] = params;
 
@@ -187,19 +187,19 @@ protected:
 
 	static constexpr u32 hashMask = 0xFF;
 
-	constexpr u32 hash(u32 x) const {
+	constexpr u32 hash(u32 x) const noexcept {
 		return p[x];
 	}
 
-	constexpr u32 hash(u32 x, u32 y) const {
+	constexpr u32 hash(u32 x, u32 y) const noexcept {
 		return p[hash(x) + y];
 	}
 
-	constexpr u32 hash(u32 x, u32 y, u32 z) const {
+	constexpr u32 hash(u32 x, u32 y, u32 z) const noexcept {
 		return p[hash(x, y) + z];
 	}
 
-	constexpr u32 hash(u32 x, u32 y, u32 z, u32 w) const {
+	constexpr u32 hash(u32 x, u32 y, u32 z, u32 w) const noexcept {
 		return p[hash(x, y, z) + w];
 	}
 

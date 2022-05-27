@@ -36,13 +36,7 @@ public:
 
 	static constexpr u32 TypesCount = sizeof...(Types);
 
-	static constexpr u32 MixesCount = []() constexpr {
-
-		u32 count = 0;
-
-		return ((count += CC::NoiseType<Types> ? 0 : 1), ...);
-
-	}();
+	static constexpr u32 MixesCount = (!CC::NoiseType<Types> + ...);
 
 	static constexpr bool Recursive = MixesCount != 0;
 
@@ -52,30 +46,30 @@ public:
 	using ContributionT = const C (&)[N];
 
 
-	constexpr NoiseMix(const Types&... types) : types(types...) {};
+	constexpr NoiseMix(const Types&... types) noexcept : types(types...) {};
 
-	constexpr NoiseMix() = default;
+	constexpr NoiseMix() noexcept = default;
 
 
 	template<SizeT I> requires(I < TypesCount)
-	inline void permutate(u32 seed) {
-		std::get<I>(types).permutate(seed);
+	inline void permutate(u32 seed) noexcept {
+		get<I>(types).permutate(seed);
 	}
 
 	template<SizeT I> requires(I < TypesCount)
-	inline void permutate() {
-		std::get<I>(types).permutate();
+	inline void permutate() noexcept {
+		get<I>(types).permutate();
 	}
 
 
 	template<SizeT I> requires(I < TypesCount)
-	constexpr TT::NthPackType<I, Types...> get() {
+	constexpr TT::NthPackType<I, Types...> get() noexcept {
 		return std::get<I>(types);
 	}
 
 
 	template<CC::FloatParam T, CC::Arithmetic A, CC::Arithmetic L, CC::Arithmetic P, CC::Float F = TT::CommonArithmeticType<T>>
-	constexpr F sample(const T& point, const NoiseParams<A, L, P>& params) const {
+	constexpr F sample(const T& point, const NoiseParams<A, L, P>& params) const noexcept {
 
 		F sample;
 
@@ -88,7 +82,7 @@ public:
 	}
 
 	template<CC::FloatParam T, CC::Arithmetic A, CC::Arithmetic L, CC::Arithmetic P, CC::Float F = TT::CommonArithmeticType<T>, CC::Arithmetic C, SizeT N> requires(!Recursive)
-	constexpr F sample(const T& point, const NoiseParams<A, L, P>& params, ContributionT<C, N> contribution) const {
+	constexpr F sample(const T& point, const NoiseParams<A, L, P>& params, ContributionT<C, N> contribution) const noexcept {
 
 		F sample = 0;
 
@@ -114,7 +108,7 @@ public:
 	}
 
 	template<CC::FloatParam T, CC::Arithmetic A, CC::Arithmetic L, CC::Arithmetic P, CC::Float F = TT::CommonArithmeticType<T>, CC::Returns<F, ArgsHelper<F, Types>...> Func> requires(!Recursive)
-	constexpr F sample(const T& point, const NoiseParams<A, L, P>& params, Func&& transform) const {
+	constexpr F sample(const T& point, const NoiseParams<A, L, P>& params, Func&& transform) const noexcept {
 
 		F sample;
 
@@ -128,7 +122,7 @@ public:
 
 
 	template<CC::FloatParam T, CC::Arithmetic A, CC::Arithmetic L, CC::Arithmetic P, CC::Float F = TT::CommonArithmeticType<T>>
-	constexpr std::vector<F> sample(std::span<const T> points, const NoiseParams<A, L, P>& params) const {
+	constexpr std::vector<F> sample(std::span<const T> points, const NoiseParams<A, L, P>& params) const noexcept {
 
 		const u32 count = points.size();
 
@@ -157,7 +151,7 @@ public:
 	}
 
 	template<CC::FloatParam T, CC::Arithmetic A, CC::Arithmetic L, CC::Arithmetic P, CC::Float F = TT::CommonArithmeticType<T>, CC::Arithmetic C, SizeT N> requires(!Recursive)
-	constexpr std::vector<F> sample(std::span<const T> points, const NoiseParams<A, L, P>& params, ContributionT<C, N> contribution) const {
+	constexpr std::vector<F> sample(std::span<const T> points, const NoiseParams<A, L, P>& params, ContributionT<C, N> contribution) const noexcept {
 
 		const u32 count = points.size();
 
@@ -190,7 +184,7 @@ public:
 	}
 
 	template<CC::FloatParam T, CC::Arithmetic A, CC::Arithmetic L, CC::Arithmetic P, CC::Float F = TT::CommonArithmeticType<T>, CC::Returns<F, ArgsHelper<F, Types>...> Func> requires(!Recursive)
-	constexpr std::vector<F> sample(std::span<const T> points, const NoiseParams<A, L, P>& params, Func&& transform) const {
+	constexpr std::vector<F> sample(std::span<const T> points, const NoiseParams<A, L, P>& params, Func&& transform) const noexcept {
 
 		const u32 count = points.size();
 
