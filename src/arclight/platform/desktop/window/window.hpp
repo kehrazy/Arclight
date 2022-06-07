@@ -62,6 +62,7 @@ class Window final {
 
 public:
 
+	using WindowRefreshFunction		= std::function<void()>;
 	using WindowMoveFunction        = std::function<void(u32, u32)>;
 	using WindowResizeFunction      = std::function<void(u32, u32)>;
 	using WindowStateChangeFunction = std::function<void(WindowState)>;
@@ -77,6 +78,7 @@ public:
 
 	void setWindowConfig(const WindowConfig& config);
 	bool create(u32 w, u32 h, const std::string& title);
+	bool createNoContext(u32 w, u32 h, const std::string& title);
 	bool createFullscreen(const std::string& title, u32 monitorID = 0);
 	void close();
 
@@ -92,6 +94,8 @@ public:
 
 	void setSize(const Vec2ui& size);
 	void setSize(u32 w, u32 h);
+
+	void setCentered();
 
 	void setLimits(const Vec2ui& min, const Vec2ui& max);
 	void setLimits(u32 minW, u32 minH, u32 maxW, u32 maxH);
@@ -109,9 +113,9 @@ public:
 	u32 getHeight() const;
 	u32 getFramebufferWidth() const;
 	u32 getFramebufferHeight() const;
-	u32 getX() const;
-	u32 getY() const;
-	Vec2ui getPosition() const;
+	i32 getX() const;
+	i32 getY() const;
+	Vec2i getPosition() const;
 	Vec2ui getSize() const;
 	Vec2ui getFramebufferSize() const;
 
@@ -153,10 +157,13 @@ public:
 	RenderCursor& getRenderCursor();
 	const RenderCursor& getRenderCursor() const;
 
+	u32 getCurrentMonitorID() const;
+
 	static u32 getMonitorCount();
 	static Monitor getMonitor(u32 id);
 	static bool monitorConfigurationChanged();
 
+	void setWindowRefreshFunction(WindowRefreshFunction function);
 	void setWindowMoveFunction(WindowMoveFunction function);
 	void setWindowResizeFunction(WindowResizeFunction function);
 	void setWindowStateChangeFunction(WindowStateChangeFunction function);
@@ -183,11 +190,12 @@ private:
 
 	std::shared_ptr<WindowHandle> windowHandle;
 
-	u32 backupWidth;
-	u32 backupHeight;
+	Vec2i backupPosition;
+	Vec2ui backupSize;
 
 	RenderCursor cursor;
 
+	WindowRefreshFunction refreshFunction;
 	WindowMoveFunction moveFunction;
 	WindowResizeFunction resizeFunction;
 	WindowStateChangeFunction stateChangeFunction;

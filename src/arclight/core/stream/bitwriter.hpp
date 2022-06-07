@@ -22,7 +22,7 @@ public:
 	constexpr explicit BitWriter(const StreamType& stream) noexcept : BitStream(stream) {}
 
 
-	template<Arithmetic A>
+	template<CC::Arithmetic A>
 	constexpr void write(SizeT size, A a) noexcept {
 
 		stream.subspan(cursor, size).write<A>(size, a);
@@ -30,13 +30,17 @@ public:
 
 	}
 
-	template<Arithmetic T>
+	template<CC::Arithmetic T>
 	constexpr void write(SizeT size, const std::span<T>& dest) noexcept {
 
 		for (SizeT i = 0; i < dest.size(); i++) {
 			write<T>(size, dest[i]);
 		}
 
+	}
+
+	constexpr BitWriter substream(SizeT size) const noexcept {
+		return BitWriter(stream.subspan(cursor, size));
 	}
 
 };

@@ -11,7 +11,7 @@
 #include "math/math.hpp"
 #include "util/assert.hpp"
 #include "util/bits.hpp"
-#include "util/typetraits.hpp"
+#include "common/typetraits.hpp"
 #include "arcconfig.hpp"
 #include "types.hpp"
 
@@ -22,6 +22,7 @@
 
 //Pixel Types
 enum class Pixel {
+	Grayscale8,
 	BGR5,
 	RGB5,
 	BGR8,
@@ -36,6 +37,23 @@ enum class Pixel {
 //Pixel Formats
 template<Pixel P>
 struct PixelFormat {};
+
+
+template<>
+struct PixelFormat<Pixel::Grayscale8> {
+
+	constexpr static u32 BytesPerPixel = 1;
+	constexpr static u32 Channels = 1;
+	constexpr static u32 RedMask    = 0x000000FF;
+	constexpr static u32 GreenMask  = 0x00000000;
+	constexpr static u32 BlueMask   = 0x00000000;
+	constexpr static u32 AlphaMask  = 0x00000000;
+	constexpr static u32 RedShift   = 0;
+	constexpr static u32 GreenShift = 0;
+	constexpr static u32 BlueShift  = 0;
+	constexpr static u32 AlphaShift = 0;
+
+};
 
 
 template<>
@@ -204,6 +222,10 @@ public:
 
 	constexpr explicit PixelStorage(const PixelT& t) {
 		*this = t;
+	}
+
+	constexpr void setGrayscale(ColorT v) {
+		setRed(v);
 	}
 
 	constexpr void setMonochrome(ColorT v) {
@@ -397,35 +419,52 @@ public:
 };
 
 
-template<class T>
-concept PixelStorageType = BaseOf<PixelStorage<T::PixelType, typename T::ColorType>, T>;
+namespace CC {
+
+	template<class T>
+	concept PixelStorageType = CC::BaseOf<PixelStorage<T::PixelType, typename T::ColorType>, T>;
+
+}
 
 
-constexpr auto operator+(PixelStorageType auto a, const PixelStorageType auto& b) {
+constexpr auto operator+(CC::PixelStorageType auto a, const CC::PixelStorageType auto& b) {
 	a += b;
 	return a;
 }
 
-constexpr auto operator-(PixelStorageType auto a, const PixelStorageType auto& b) {
+constexpr auto operator-(CC::PixelStorageType auto a, const CC::PixelStorageType auto& b) {
 	a -= b;
 	return a;
 }
 
-constexpr auto operator*(PixelStorageType auto a, double f) {
+constexpr auto operator*(CC::PixelStorageType auto a, double f) {
 	a *= f;
 	return a;
 }
 
-constexpr auto operator*(double f, PixelStorageType auto a) {
+constexpr auto operator*(double f, CC::PixelStorageType auto a) {
 	a *= f;
 	return a;
 }
 
-constexpr auto operator/(PixelStorageType auto a, double f) {
+constexpr auto operator/(CC::PixelStorageType auto a, double f) {
 	a /= f;
 	return a;
 }
 
+
+
+struct PixelGrayscale8 : public PixelStorage<Pixel::Grayscale8, u8> {
+
+	constexpr PixelGrayscale8() : PixelStorage(0) {}
+
+	constexpr PixelGrayscale8(u8 v) {
+		setGrayscale(v);
+	}
+
+	using PixelStorage::PixelStorage;
+
+};
 
 
 struct PixelRGB5 : public PixelStorage<Pixel::RGB5, u8> {
@@ -533,57 +572,28 @@ struct PixelARGB8 : public PixelStorage<Pixel::ARGB8, u8> {
 
 
 
-template<Pixel P>
-struct PixelType {};
+template<Pixel P> struct _PixelType {};
+template<> struct _PixelType<Pixel::Grayscale8> { using Type = PixelGrayscale8; };
+template<> struct _PixelType<Pixel::RGB5> { using Type = PixelRGB5; };
+template<> struct _PixelType<Pixel::BGR5> { using Type = PixelBGR5; };
+template<> struct _PixelType<Pixel::RGB8> { using Type = PixelRGB8; };
+template<> struct _PixelType<Pixel::BGR8> { using Type = PixelBGR8; };
+template<> struct _PixelType<Pixel::RGBA8> { using Type = PixelRGBA8; };
+template<> struct _PixelType<Pixel::ABGR8> { using Type = PixelABGR8; };
+template<> struct _PixelType<Pixel::BGRA8> { using Type = PixelBGRA8; };
+template<> struct _PixelType<Pixel::ARGB8> { using Type = PixelARGB8; };
 
-template<>
-struct PixelType<Pixel::RGB5> {
-	using Type = PixelRGB5;
-};
+template<Pixel P> using PixelType = typename _PixelType<P>::Type;
 
-template<>
-struct PixelType<Pixel::BGR5> {
-	using Type = PixelBGR5;
-};
-
-template<>
-struct PixelType<Pixel::RGB8> {
-	using Type = PixelRGB8;
-};
-
-template<>
-struct PixelType<Pixel::BGR8> {
-	using Type = PixelBGR8;
-};
-
-template<>
-struct PixelType<Pixel::RGBA8> {
-	using Type = PixelRGBA8;
-};
-
-template<>
-struct PixelType<Pixel::ABGR8> {
-	using Type = PixelABGR8;
-};
-
-template<>
-struct PixelType<Pixel::BGRA8> {
-	using Type = PixelBGRA8;
-};
-
-template<>
-struct PixelType<Pixel::ARGB8> {
-	using Type = PixelARGB8;
-};
 
 
 template<Pixel P>
 class Colors
 {
 
-	using PixelT = PixelType<P>::Type;
-	using ColorT = PixelT::ColorType;
-	using Format = PixelT::Format;
+	using PixelT = PixelType<P>;
+	using ColorT = typename PixelT::ColorType;
+	using Format = typename PixelT::Format;
 	
 	constexpr static PixelT construct(float r, float g, float b, float a) {
 
@@ -656,7 +666,7 @@ public:
 
 		using SrcFormat = typename U::Format;
 		using DestFormat = PixelFormat<DestPixel>;
-		using DestPixelType = typename PixelType<DestPixel>::Type;
+		using DestPixelType = PixelType<DestPixel>;
 		using SrcType = typename U::PackedT;
 		using DestType = typename DestPixelType::PackedT;
 		using ConvType = TT::Conditional<(sizeof(SrcType) > sizeof(DestType)), SrcType, DestType>;
@@ -682,17 +692,19 @@ public:
 		DestType BValueOut = convertChannel<ConvType, BBitsIn, BBitsOut>(BValueIn) << DestFormat::BlueShift;
 		DestType AValueOut = convertChannel<ConvType, ABitsIn, ABitsOut>(AValueIn) << DestFormat::AlphaShift;
 
+		AValueOut |= DestFormat::AlphaMask * (ABitsIn == 0);
+
 		DestType out = RValueOut | GValueOut | BValueOut | AValueOut;
 
 		return DestPixelType(out);
 
 	}
 
-	template<Pixel DestPixel, UnsignedIntegral T>
+	template<Pixel DestPixel, CC::UnsignedIntegral T>
 	constexpr static auto convert(T pixel, T redMask, u32 redShift, T greenMask, u32 greenShift, T blueMask, u32 blueShift, T alphaMask = 0, u32 alphaShift = 0) {
 
 		using DestFormat = PixelFormat<DestPixel>;
-		using DestPixelType = typename PixelType<DestPixel>::Type;
+		using DestPixelType = PixelType<DestPixel>;
 		using DestType = typename DestPixelType::PackedT;
 		using ConvType = TT::Conditional<(sizeof(T) > sizeof(DestType)), T, DestType>;
 

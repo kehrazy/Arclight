@@ -11,8 +11,8 @@
 #include "types.hpp"
 #include "arcconfig.hpp"
 #include "arcintrinsic.hpp"
-#include "util/concepts.hpp"
-#include "util/typetraits.hpp"
+#include "common/concepts.hpp"
+#include "common/typetraits.hpp"
 
 #include <cmath>
 #include <limits>
@@ -44,13 +44,19 @@ namespace Math {
 	template<Arithmetic A>
 	using PromotedType = TT::Conditional<Equal<A, long double>, A, double>;
 
+	template<CC::Float F>
+	struct SplitFloat {
+		F integer;
+		F fractional;
+	};
 
-	template<Arithmetic A> constexpr auto ceil(A);
-	template<Arithmetic A> constexpr auto floor(A);
-	template<Arithmetic A> constexpr auto trunc(A);
-	template<Arithmetic A> constexpr auto round(A);
-	template<Float F> constexpr bool isNaN(F);
-	template<Float F> constexpr bool isInfinity(F);
+
+	template<CC::Float F> constexpr bool isNaN(F);
+	template<CC::Float F> constexpr bool isInfinity(F);
+	template<CC::Arithmetic A> constexpr auto ceil(A value);
+	template<CC::Arithmetic A> constexpr auto floor(A value);
+	template<CC::Arithmetic A> constexpr auto trunc(A value);
+	template<CC::Arithmetic A> constexpr auto round(A value);
 
 
 	template<Arithmetic A, Float F = TT::ToSizedFloat<A>>
@@ -63,7 +69,7 @@ namespace Math {
 		return degrees * pi / F(180);
 	}
 
-	template<Arithmetic A>
+	template<CC::Arithmetic A>
 	constexpr auto abs(A value) {
 
 		if (std::is_constant_evaluated()) {
@@ -88,26 +94,30 @@ namespace Math {
 
 		}
 
-		return std::abs(value);
+		if constexpr (CC::UnsignedType<A>) {
+			return value;
+		} else {
+			return std::abs(value);
+		}
 
 	}
 
-	template<Arithmetic A, Arithmetic B, Arithmetic C, Arithmetic... Args>
+	template<CC::Arithmetic A, CC::Arithmetic B, CC::Arithmetic C, CC::Arithmetic... Args>
 	constexpr auto max(A a, B b, C c, Args... args) {
 		return std::max({ a, b, c, args... });
 	}
 
-	template<Arithmetic A, Arithmetic B>
+	template<CC::Arithmetic A, CC::Arithmetic B>
 	constexpr auto max(A a, B b) {
 		return std::max<std::common_type_t<A, B>>(a, b);
 	}
 
-	template<Arithmetic A, Arithmetic B, Arithmetic C, Arithmetic... Args>
+	template<CC::Arithmetic A, CC::Arithmetic B, CC::Arithmetic C, CC::Arithmetic... Args>
 	constexpr auto min(A a, B b, C c, Args... args) {
 		return std::min({ a, b, c, args... });
 	}
 
-	template<Arithmetic A, Arithmetic B>
+	template<CC::Arithmetic A, CC::Arithmetic B>
 	constexpr auto min(A a, B b) {
 		return std::min<std::common_type_t<A, B>>(a, b);
 	}
@@ -130,18 +140,18 @@ namespace Math {
 
 	}
 
-	template<Integral I>
+	template<CC::Integral I>
 	constexpr bool isZero(I value) {
 		return value == I(0);
 	}
 
-	template<Float F>
+	template<CC::Float F>
 	constexpr bool isZero(F value) {
 		return Math::abs(value) < minEpsilon;
 	}
 
-	template<Arithmetic A, Arithmetic B>
-	constexpr bool equal(A a, B b) requires (Float<A> || Float<B>) {
+	template<CC::Arithmetic A, CC::Arithmetic B>
+	constexpr bool equal(A a, B b) requires (CC::Float<A> || CC::Float<B>) {
 
 		auto x = Math::abs(a - b);
 		auto y = Math::abs(a);
@@ -151,13 +161,13 @@ namespace Math {
 
 	}
 
-	template<Integral I, Integral J>
+	template<CC::Integral I, CC::Integral J>
 	constexpr bool equal(I a, J b) {
 		return a == b;
 	}
 
-	template<Arithmetic A, Arithmetic B>
-	constexpr bool less(A a, B b) requires (Float<A> || Float<B>) {
+	template<CC::Arithmetic A, CC::Arithmetic B>
+	constexpr bool less(A a, B b) requires (CC::Float<A> || CC::Float<B>) {
 
 		auto y = Math::abs(a);
 		auto z = Math::abs(b);
@@ -166,13 +176,13 @@ namespace Math {
 
 	}
 
-	template<Integral I, Integral J>
+	template<CC::Integral I, CC::Integral J>
 	constexpr bool less(I a, J b) {
 		return a < b;
 	}
 
-	template<Arithmetic A, Arithmetic B>
-	constexpr bool greater(A a, B b) requires (Float<A> || Float<B>) {
+	template<CC::Arithmetic A, CC::Arithmetic B>
+	constexpr bool greater(A a, B b) requires (CC::Float<A> || CC::Float<B>) {
 
 		auto y = Math::abs(a);
 		auto z = Math::abs(b);
@@ -181,13 +191,13 @@ namespace Math {
 
 	}
 
-	template<Integral I, Integral J>
+	template<CC::Integral I, CC::Integral J>
 	constexpr bool greater(I a, J b) {
 		return a > b;
 	}
 
-	template<Arithmetic A, Arithmetic B>
-	constexpr bool lessEqual(A a, B b) requires (Float<A> || Float<B>) {
+	template<CC::Arithmetic A, CC::Arithmetic B>
+	constexpr bool lessEqual(A a, B b) requires (CC::Float<A> || CC::Float<B>) {
 
 		auto y = Math::abs(a);
 		auto z = Math::abs(b);
@@ -196,13 +206,13 @@ namespace Math {
 
 	}
 
-	template<Integral I, Integral J>
+	template<CC::Integral I, CC::Integral J>
 	constexpr bool lessEqual(I a, J b) {
 		return a <= b;
 	}
 
-	template<Arithmetic A, Arithmetic B>
-	constexpr bool greaterEqual(A a, B b) requires (Float<A> || Float<B>) {
+	template<CC::Arithmetic A, CC::Arithmetic B>
+	constexpr bool greaterEqual(A a, B b) requires (CC::Float<A> || CC::Float<B>) {
 
 		auto y = Math::abs(a);
 		auto z = Math::abs(b);
@@ -211,32 +221,49 @@ namespace Math {
 
 	}
 
-	template<Integral I, Integral J>
+	template<CC::Integral I, CC::Integral J>
 	constexpr bool greaterEqual(I a, J b) {
 		return a >= b;
 	}
 
-	template<Arithmetic A>
-	constexpr auto sign(A value) noexcept {
-		return (value > A(0)) - (value < A(0));
+	template<CC::Integer I>
+	constexpr auto sign(I value) noexcept {
+		return (value > I(0)) - (value < I(0));
 	}
 
-	template<Arithmetic A>
+	template<CC::Float F>
+	constexpr auto sign(F value) noexcept {
+
+		if constexpr (std::is_constant_evaluated()) {
+			return less(value, F(0)) ? -1 : 1;
+		}
+
+		return 1 - std::signbit(value) * 2;
+
+	}
+
+	template<CC::Arithmetic A>
 	inline auto signbit(A value) noexcept {
 		return std::signbit(value);
 	}
 
-	template<Arithmetic A>
-	inline auto copysign(A value, A sgn) noexcept {
+	template<CC::Arithmetic A>
+	constexpr auto copysign(A value, A sgn) noexcept {
+
+		if constexpr (std::is_constant_evaluated()) {
+			return sign(value) == sign(sgn) ? value : -value;
+		}
+
 		return std::copysign(value, sgn);
+
 	}
 
-	template<Integral I> constexpr bool isInfinity(I) 			{ return false; }
-	template<Integral I> constexpr bool isPositiveInfinity(I) 	{ return false; }
-	template<Integral I> constexpr bool isNegativeInfinity(I) 	{ return false; }
-	template<Integral I> constexpr bool isNaN(I) 				{ return false; }
+	template<CC::Integral I> constexpr bool isInfinity(I) 			{ return false; }
+	template<CC::Integral I> constexpr bool isPositiveInfinity(I) 	{ return false; }
+	template<CC::Integral I> constexpr bool isNegativeInfinity(I) 	{ return false; }
+	template<CC::Integral I> constexpr bool isNaN(I) 				{ return false; }
 
-	template<Float F>
+	template<CC::Float F>
 	constexpr bool isInfinity(F value) {
 
 		if (std::is_constant_evaluated()) {
@@ -247,7 +274,7 @@ namespace Math {
 
 	}
 
-	template<Float F>
+	template<CC::Float F>
 	constexpr bool isPositiveInfinity(F value) {
 
 		if (std::is_constant_evaluated()) {
@@ -258,7 +285,7 @@ namespace Math {
 
 	}
 
-	template<Float F>
+	template<CC::Float F>
 	constexpr bool isNegativeInfinity(F value) {
 
 		if (std::is_constant_evaluated()) {
@@ -269,7 +296,7 @@ namespace Math {
 
 	}
 
-	template<Float F>
+	template<CC::Float F>
 	constexpr bool isNaN(F value) {
 
 		if (std::is_constant_evaluated()) {
@@ -280,7 +307,7 @@ namespace Math {
 
 	}
 
-	template<Arithmetic A>
+	template<CC::Arithmetic A>
 	ARC_CMATH_CONSTEXPR auto sin(A radians) {
 /*
 		if (std::is_constant_evaluated()) {
@@ -303,17 +330,17 @@ namespace Math {
 
 	}
 
-	template<Arithmetic A>
+	template<CC::Arithmetic A>
 	ARC_CMATH_CONSTEXPR auto cos(A radians) {
 		return std::cos(radians);
 	}
 
-	template<Arithmetic A>
+	template<CC::Arithmetic A>
 	ARC_CMATH_CONSTEXPR auto tan(A radians) {
 		return std::tan(radians);
 	}
 
-	template<Arithmetic A>
+	template<CC::Arithmetic A>
 	ARC_CMATH_CONSTEXPR auto cot(A radians) {
 
 		auto soc = tan(radians);
@@ -325,28 +352,28 @@ namespace Math {
 
 	}
 
-	template<Arithmetic A>
+	template<CC::Arithmetic A>
 	ARC_CMATH_CONSTEXPR auto asin(A value) {
 		return std::asin(value);
 	}
 
-	template<Arithmetic A>
+	template<CC::Arithmetic A>
 	ARC_CMATH_CONSTEXPR auto acos(A value) {
 		return std::acos(value);
 	}
 
-	template<Arithmetic A>
+	template<CC::Arithmetic A>
 	ARC_CMATH_CONSTEXPR auto atan(A value) {
 		return std::atan(value);
 	}
 
-	template<Arithmetic A, Arithmetic B>
+	template<CC::Arithmetic A, CC::Arithmetic B>
 	ARC_CMATH_CONSTEXPR auto atan2(A y, B x) {
 		return std::atan2(y, x);
 	}
 
-	template<Arithmetic A, Arithmetic B>
-	constexpr auto mod(A a, B b) requires (Float<A> || Float<B>) {
+	template<CC::Arithmetic A, CC::Arithmetic B>
+	constexpr auto mod(A a, B b) requires (CC::Float<A> || CC::Float<B>) {
 
 		if (std::is_constant_evaluated()) {
 			return a - trunc(a / b) * b;
@@ -356,23 +383,32 @@ namespace Math {
 
 	}
 
-	template<Integer A, Integer B>
+	template<CC::Integer A, CC::Integer B>
 	constexpr auto mod(A a, B b) {
 		return a % b;
 	}
 
-	template<Float F>
-	ARC_CMATH_CONSTEXPR F fract(F v) {
-		[[maybe_unused]] F f;
-		return std::modf(v, &f);
+	template<CC::Float F>
+	ARC_CMATH_CONSTEXPR SplitFloat<F> split(F v) {
+
+		SplitFloat<F> f;
+		f.fractional = std::modf(v, &f.integer);
+
+		return f;
+
 	}
 
-	template<Arithmetic A>
+	template<CC::Float F>
+	ARC_CMATH_CONSTEXPR F fract(F v) {
+		return split(v).fractional;
+	}
+
+	template<CC::Arithmetic A>
 	ARC_CMATH_CONSTEXPR auto exp(A exponent) {
 		return A(std::exp(exponent));
 	}
 
-	template<Arithmetic A, Arithmetic B>
+	template<CC::Arithmetic A, CC::Arithmetic B>
 	ARC_CMATH_CONSTEXPR auto pow(A base, B exponent) {
 
 		if (std::is_constant_evaluated()) {
@@ -384,57 +420,57 @@ namespace Math {
 		return std::pow(base, exponent);
 	}
 
-	template<Arithmetic A>
+	template<CC::Arithmetic A>
 	ARC_CMATH_CONSTEXPR auto ln(A value) {
 		return std::log(value);
 	}
 
-	template<Arithmetic A>
+	template<CC::Arithmetic A>
 	ARC_CMATH_CONSTEXPR auto log(A value) {
 		return std::log10(value);
 	}
 
-	template<Arithmetic A, Arithmetic B>
+	template<CC::Arithmetic A, CC::Arithmetic B>
 	ARC_CMATH_CONSTEXPR auto log(A base, B value) {
 		return Math::log(value) / Math::log(base);
 	}
 
-	template<Arithmetic A>
+	template<CC::Arithmetic A>
 	ARC_CMATH_CONSTEXPR auto sqrt(A value) {
 		return std::sqrt(value);
 	}
 
-	template<Arithmetic A>
+	template<CC::Arithmetic A>
 	ARC_CMATH_CONSTEXPR auto cbrt(A value) {
 		return std::cbrt(value);
 	}
 
-	template<Arithmetic A>
+	template<CC::Arithmetic A>
 	constexpr auto ceil(A value) {
 		return std::ceil(value);
 	}
 
-	template<Arithmetic A>
+	template<CC::Arithmetic A>
 	constexpr auto floor(A value) {
 		return std::floor(value);
 	}
 
-	template<Arithmetic A>
+	template<CC::Arithmetic A>
 	constexpr auto trunc(A value) {
 		return std::trunc(value);
 	}
 
-	template<Arithmetic A>
+	template<CC::Arithmetic A>
 	constexpr auto round(A value) {
 		return std::round(value);
 	}
 
-	template<Arithmetic A>
+	template<CC::Arithmetic A>
 	ARC_CMATH_CONSTEXPR auto round(A value, u32 digits) noexcept {
 		return (value * Math::pow(10, digits) + 0.5) / Math::pow(10, digits);
 	}
 
-	template<Arithmetic A, Arithmetic B, Arithmetic C, Arithmetic D, Arithmetic E>
+	template<CC::Arithmetic A, CC::Arithmetic B, CC::Arithmetic C, CC::Arithmetic D, CC::Arithmetic E>
 	constexpr auto map(A value, B start1, C end1, D start2, E end2) noexcept {
 
 		using F = TT::Conditional<TT::IsAnyOf<double, A, B, C, D, E>, double, float>;
@@ -447,37 +483,38 @@ namespace Math {
 
 	};
 
-	template<Arithmetic A, Arithmetic B, Arithmetic C>
+	template<CC::Arithmetic A, CC::Arithmetic B, CC::Arithmetic C>
 	constexpr auto lerp(A start, B end, C factor) noexcept {
 		return start + factor * (end - start);
 	}
 
-	template<Arithmetic A, Arithmetic B, Arithmetic C>
+	template<CC::Arithmetic A, CC::Arithmetic B, CC::Arithmetic C>
 	constexpr auto clamp(A value, B lowerBound, C upperBound) noexcept {
 		return less(value, lowerBound) ? lowerBound : (greater(value, upperBound) ? upperBound : value);
 	}
 
-	template<Arithmetic A, Arithmetic B, Arithmetic C>
+	template<CC::Arithmetic A, CC::Arithmetic B, CC::Arithmetic C>
 	constexpr bool inRange(A value, B lowerBound, C upperBound) {
 		return greaterEqual(value, lowerBound) && lessEqual(value, upperBound);
 	}
 
-	template<Integer I>
+	template<CC::Integer I>
 	constexpr bool isAligned(I x, AlignT alignment) noexcept {
 		return !(x & (alignment - 1));
 	}
 
-	template<Integer I>
+	template<CC::Integer I>
 	constexpr I alignUp(I x, AlignT alignment) noexcept {
 		return (x + alignment - 1) & ~(alignment - 1);
 	}
 
-	template<Integer I>
+	template<CC::Integer I>
 	constexpr I alignDown(I x, AlignT alignment) noexcept {
 		return x & ~(alignment - 1);
 	}
 
-	template<Float F>
+
+	template<CC::Float F>
 	constexpr F triangle(F x) noexcept {
 		return abs(mod(x - 1, 2.0f) - 1);
 	}
@@ -493,12 +530,12 @@ namespace Math {
 	public:
 
 		//Zero
-		template<Arithmetic A>
+		template<CC::Arithmetic A>
 		constexpr auto operator<=>(A rhs) requires(Type == ConstantType::Zero) {
 			return Math::isZero(rhs) ? 0 : (Math::greater(0, rhs) ? 1 : -1);
 		}
 
-		template<Arithmetic A>
+		template<CC::Arithmetic A>
 		constexpr bool operator==(A rhs) requires(Type == ConstantType::Zero) {
 			return Math::isZero(rhs);
 		}

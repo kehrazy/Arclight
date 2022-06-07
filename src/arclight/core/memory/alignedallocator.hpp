@@ -3,7 +3,7 @@
  *
  *	 This file is part of Arclight. All rights reserved.
  *
- *	 AlignedAllocator.hpp
+ *	 alignedallocator.hpp
  */
 
 #pragma once
@@ -19,7 +19,7 @@
 
 
 
-template<class T, AlignT ReqAlignment> requires (!ConstType<T>)
+template<class T, AlignT ReqAlignment> requires (!CC::ConstType<T>)
 class AlignedAllocator {
 
 public:

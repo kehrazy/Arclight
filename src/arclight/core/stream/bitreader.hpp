@@ -22,7 +22,7 @@ public:
 	constexpr explicit BitReader(const StreamType& stream) noexcept : BitStream(stream) {}
 
 
-	template<Arithmetic A>
+	template<CC::Arithmetic A>
 	constexpr A read(SizeT size) noexcept {
 
 		A a = stream.subspan(cursor, size).read<A>(size);
@@ -32,13 +32,17 @@ public:
 
 	}
 
-	template<Arithmetic T>
+	template<CC::Arithmetic T>
 	constexpr void read(const std::span<T>& dest, SizeT size) noexcept {
 
 		for (SizeT i = 0; i < dest.size(); i++) {
 			dest[i] = read<T>(size);
 		}
 
+	}
+
+	constexpr BitReader substream(SizeT size) const noexcept {
+		return BitReader(stream.subspan(cursor, size));
 	}
 
 };

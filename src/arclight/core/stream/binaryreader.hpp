@@ -23,11 +23,10 @@ public:
 	constexpr explicit BinaryReader(const std::span<ByteType>& stream, ByteOrder order = ByteOrder::Little) noexcept : BinaryStream(stream), convert(Bits::requiresEndianConversion(order)) {}
 
 
-	template<Arithmetic T>
-	constexpr T read() noexcept {
+	template<CC::Arithmetic T>
+	constexpr T peek() noexcept {
 
 		T t = Bits::assemble<T>(head());
-		seek(sizeof(T));
 
 		if (convert) {
 			t = Bits::swap(t);
@@ -37,13 +36,36 @@ public:
 
 	}
 
-	template<Arithmetic T>
+	template<CC::Arithmetic T>
+	constexpr void peek(const std::span<T>& dest) noexcept {
+
+		for (SizeT i = 0; i < dest.size(); i++) {
+			dest[i] = peek<T>();
+		}
+
+	}
+
+	template<CC::Arithmetic T>
+	constexpr T read() noexcept {
+
+		T x = peek<T>();
+		seek(sizeof(T));
+
+		return x;
+
+	}
+
+	template<CC::Arithmetic T>
 	constexpr void read(const std::span<T>& dest) noexcept {
 
 		for (SizeT i = 0; i < dest.size(); i++) {
 			dest[i] = read<T>();
 		}
 
+	}
+
+	constexpr BinaryReader substream(SizeT size) const noexcept {
+		return BinaryReader(stream.subspan(cursor, size));
 	}
 
 private:

@@ -10,22 +10,28 @@
 
 #include "math/math.hpp"
 #include "math/vector.hpp"
-#include "util/concepts.hpp"
+#include "common/concepts.hpp"
 #include <numeric>
 #include <random>
 #include <array>
 
 
-template<class Derived>
+enum class NoiseFractal {
+	Standard,
+	Ridged,
+	RidgedSq,
+};
+
+
 class NoiseBase {
 
 public:
 
-	NoiseBase() : p(defaultPermutation) {};
+	constexpr NoiseBase() : p(defaultP) {};
 
 
 	inline void permutate(u32 seed) {
-		p = generate(seed);
+		p = genPermutation(seed);
 	}
 
 	inline void permutate() {
@@ -33,30 +39,78 @@ public:
 		permutate(rd());
 	}
 
+protected:
 
-	template<class T, Arithmetic A, Arithmetic L, Arithmetic P> requires(Float<T> || FloatVector<T>)
-	auto sample(T point, A frequency, u32 octaves, L lacunarity, P persistence) const -> TT::CommonArithmeticType<T> {
+	template<NoiseFractal Fractal, CC::Float F>
+	static constexpr F applyFractal(F sample) {
+
+		if constexpr (Fractal != NoiseFractal::Standard) {
+
+			sample = 1 - Math::abs(sample);
+
+			if constexpr (Fractal == NoiseFractal::RidgedSq) {
+				sample *= sample;
+			}
+
+			sample = sample * 2 - 1;
+		}
+
+		return sample;
+
+	}
+
+	template<NoiseFractal Fractal, CC::FloatParam T, CC::Arithmetic A, CC::Arithmetic L, CC::Arithmetic P, CC::Invocable<T, A> Func>
+	static constexpr TT::CommonArithmeticType<T> fractalSample(Func&& func, const T& point, A frequency, u32 octaves, L lacunarity, P persistence) {
 
 		arc_assert(octaves >= 1, "Octaves count cannot be 0");
 
 		using F = TT::CommonArithmeticType<T>;
 
-		F noise = 0;
+		if (octaves == 1) {
+			return func(point, frequency);
+		}
+
 		F scale = 1;
-		F range = 1;
+		F noise = 0;
+		F range = 0;
 
 		for (u32 i = 0; i < octaves; i++) {
-			noise += static_cast<const Derived*>(this)->sample(point, frequency) * scale;
-			frequency *= lacunarity;
-			scale *= persistence;
+
+			F sample = func(point, frequency);
+
+			noise += sample * scale;
+
 			range += scale;
+			frequency *= lacunarity;
+
+			if constexpr (Fractal == NoiseFractal::Standard) {
+				scale *= persistence;
+			} else {
+				scale *= 1 - Math::abs(sample);
+				scale *= 0.5;
+			}
 		}
 
 		return noise / range;
 
 	}
 
-protected:
+	template<NoiseFractal Fractal, CC::FloatParam T, CC::Arithmetic A, CC::Arithmetic L, CC::Arithmetic P, CC::Invocable<T, A> Func, CC::Float F = TT::CommonArithmeticType<T>>
+	static constexpr std::vector<F> fractalSample(Func&& func, std::span<const T> points, std::span<const A> frequencies, u32 octaves, L lacunarity, P persistence) {
+
+		arc_assert(octaves >= 1, "Octaves count cannot be 0");
+		arc_assert(points.size() == frequencies.size(), "The amount of points need to match the amount of frequencies");
+
+		if (octaves == 1) {
+			return func(points, frequencies);
+		}
+
+		arc_force_assert("Fractal span sampling not yet supported");
+
+		return {};
+
+	}
+
 
 	static constexpr u32 grad1DMask = 0x1;
 	static constexpr u32 grad2DMask = 0x7;
@@ -64,45 +118,56 @@ protected:
 	static constexpr u32 grad4DMask = 0x1F;
 
 
-	static constexpr float grad1D[2] = {
+	template<class T>
+	static constexpr T gradient;
+
+	template<CC::Float F>
+	static constexpr F gradient<F>[2] = {
 		-1, 1
 	};
 
-	static const inline Vec2f grad2D[8] = {
-		Vec2f( 1, 1).normalized(), Vec2f( 1, 0),
-		Vec2f(-1, 1).normalized(), Vec2f(-1, 0),
-		Vec2f( 1,-1).normalized(), Vec2f( 0, 1),
-		Vec2f(-1,-1).normalized(), Vec2f( 0,-1)
+	template<CC::FloatVector V> requires(V::Size == 2)
+	static constexpr V gradient<V>[8] = {
+		{ 0.707107, 0.707107}, { 1, 0},
+		{-0.707107, 0.707107}, {-1, 0},
+		{ 0.707107,-0.707107}, { 0, 1},
+		{-0.707107,-0.707107}, { 0,-1}
 	};
 
-	static const inline Vec3f grad3D[16] = {
-		Vec3f( 1, 1,-1).normalized(), Vec3f(-1, 1, 1).normalized(),
-		Vec3f(-1, 1,-1).normalized(), Vec3f( 1,-1, 1).normalized(),
-		Vec3f( 1,-1,-1).normalized(), Vec3f(-1,-1, 1).normalized(),
-		Vec3f(-1,-1,-1).normalized(), Vec3f( 1, 1, 1).normalized(),
-		Vec3f( 1, 1, 0).normalized(), Vec3f( 1, 0, 0),
-		Vec3f(-1, 1, 0).normalized(), Vec3f(-1, 0, 0),
-		Vec3f( 1,-1, 0).normalized(), Vec3f( 0, 1, 0),
-		Vec3f(-1,-1, 0).normalized(), Vec3f( 0, 0, 1)
+	template<CC::FloatVector V> requires(V::Size == 3)
+	static constexpr V gradient<V>[16] = {
+		{ 0.57735, 0.57735,-0.57735}, { 0.707107, 0.707107, 0},
+		{-0.57735, 0.57735, 0.57735}, {-0.707107, 0.707107, 0},
+		{-0.57735, 0.57735,-0.57735}, { 0.707107,-0.707107, 0},
+		{ 0.57735,-0.57735, 0.57735}, {-0.707107,-0.707107, 0},
+		{ 0.57735,-0.57735,-0.57735}, { 1, 0, 0},
+		{-0.57735,-0.57735, 0.57735}, {-1, 0, 0},
+		{-0.57735,-0.57735,-0.57735}, { 0, 1, 0},
+		{ 0.57735, 0.57735, 0.57735}, { 0, 0, 1}
 	};
 
-	static const inline Vec4f grad4D[32] = {
-		Vec4f(-1, 1,-1, 0).normalized(), Vec4f(-1, 1,-1,-1).normalized(),
-		Vec4f( 1,-1,-1, 0).normalized(), Vec4f( 1,-1,-1,-1).normalized(),
-		Vec4f(-1,-1,-1, 0).normalized(), Vec4f(-1,-1,-1,-1).normalized(),
-		Vec4f( 1, 1, 0, 0).normalized(), Vec4f( 1, 1, 0,-1).normalized(),
-		Vec4f( 1,-1, 0, 0).normalized(), Vec4f( 1,-1, 0,-1).normalized(),
-		Vec4f(-1,-1, 0, 0).normalized(), Vec4f(-1,-1, 0,-1).normalized(),
-		Vec4f(-1, 1, 1, 0).normalized(), Vec4f(-1, 1, 1,-1).normalized(),
-		Vec4f( 1,-1, 1, 0).normalized(), Vec4f( 1,-1, 1,-1).normalized(),
-		Vec4f( 1, 1, 1, 0).normalized(), Vec4f( 1, 1, 1,-1).normalized(),
-		Vec4f( 1, 1,-1, 1).normalized(), Vec4f(-1,-1, 1, 1).normalized(),
-		Vec4f(-1, 1,-1, 1).normalized(), Vec4f( 1, 1, 1, 1).normalized(),
-		Vec4f( 1,-1,-1, 1).normalized(), Vec4f(-1, 0, 0, 1),
-		Vec4f( 1, 1, 0, 1).normalized(), Vec4f( 0, 0, 1, 1),
-		Vec4f(-1, 1, 0, 1).normalized(), Vec4f( 0, 1, 0, 0),
-		Vec4f(-1,-1, 0, 1).normalized(), Vec4f( 0, 0, 1, 0),
-		Vec4f(-1, 1, 1, 1).normalized(), Vec4f( 0, 1, 0,-1),
+	template<CC::FloatVector V> requires(V::Size == 4)
+	static constexpr V gradient<V>[32] = {
+		{-0.5, 0.5,-0.5,-0.5}, {-0.57735, 0.57735,-0.57735, 0},
+		{ 0.5,-0.5,-0.5,-0.5}, { 0.57735,-0.57735,-0.57735, 0},
+		{-0.5,-0.5,-0.5,-0.5}, {-0.57735,-0.57735,-0.57735, 0},
+		{-0.5, 0.5, 0.5,-0.5}, {-0.57735, 0.57735, 0.57735, 0},
+		{ 0.5,-0.5, 0.5,-0.5}, { 0.57735,-0.57735, 0.57735, 0},
+		{ 0.5, 0.5, 0.5,-0.5}, { 0.57735, 0.57735, 0.57735, 0},
+		{ 0.5, 0.5,-0.5, 0.5}, { 0.57735, 0.57735, 0,-0.57735},
+		{-0.5,-0.5, 0.5, 0.5}, { 0.57735,-0.57735, 0,-0.57735},
+		{-0.5, 0.5,-0.5, 0.5}, {-0.57735,-0.57735, 0,-0.57735},
+		{ 0.5, 0.5, 0.5, 0.5}, { 0.57735, 0.57735, 0, 0.57735},
+		{ 0.5,-0.5,-0.5, 0.5}, {-0.57735, 0.57735, 0, 0.57735},
+		{-0.5, 0.5, 0.5, 0.5}, {-0.57735,-0.57735, 0, 0.57735},
+		{ 0.707107, 0.707107, 0, 0},
+		{ 0.707107,-0.707107, 0, 0},
+		{-0.707107,-0.707107, 0, 0},
+		{-1, 0, 0, 1},
+		{ 0, 0, 1, 1},
+		{ 0, 1, 0, 0},
+		{ 0, 0, 1, 0},
+		{ 0, 1, 0,-1},
 	};
 
 
@@ -112,23 +177,23 @@ protected:
 		return p[x];
 	}
 
-	constexpr u32 hash(const Vec2ui& vec) const {
-		return p[hash(vec.x) + vec.y];
+	constexpr u32 hash(u32 x, u32 y) const {
+		return p[hash(x) + y];
 	}
 
-	constexpr u32 hash(const Vec3ui& vec) const {
-		return p[hash(vec.toVec2()) + vec.z];
+	constexpr u32 hash(u32 x, u32 y, u32 z) const {
+		return p[hash(x, y) + z];
 	}
 
-	constexpr u32 hash(const Vec4ui& vec) const {
-		return p[hash(vec.toVec3()) + vec.w];
+	constexpr u32 hash(u32 x, u32 y, u32 z, u32 w) const {
+		return p[hash(x, y, z) + w];
 	}
 
 private:
 
 	using PermutationT = std::array<u32, 512>;
 
-	static PermutationT generate(u32 seed) {
+	static PermutationT genPermutation(u32 seed) {
 
 		PermutationT p;
 
@@ -141,9 +206,18 @@ private:
 
 	}
 
-	static constexpr u32 defaultSeed = 0;
+	static constexpr u32 defaultSeed = 0xA6C;
 
-	inline static const PermutationT defaultPermutation = generate(defaultSeed);
+	static inline const PermutationT defaultP = genPermutation(defaultSeed);
 
 	PermutationT p;
+
 };
+
+
+namespace CC {
+
+	template<class T>
+	concept NoiseType = BaseOf<NoiseBase, T>;
+
+}
