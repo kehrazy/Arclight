@@ -10,6 +10,7 @@
 
 #include "arcintrinsic.hpp"
 #include "common/concepts.hpp"
+#include "common/typetraits.hpp"
 #include "util/bits.hpp"
 
 
@@ -23,12 +24,12 @@ namespace MathX::FPIntrinsic {
 	concept IEEEMaskableFloat = IEEEFloat<T> && TT::HasSizedInteger<T>;
 
 
-	enum class Round {
-		Up,
-		Down,
-		Near,
-		Even,
-		Zero
+	enum class RoundingMode {
+		Up,         //Ceil
+		Down,       //Floor
+		Zero,       //Trunc
+		Infinity,   //Extrude
+		NearestInf, //Round
 	};
 
 
@@ -355,7 +356,6 @@ namespace MathX::FPIntrinsic {
 
 	/*
 	 *  Returns the greater value of x and y
-	 *  NaN and the sign of zeroes are respected
 	 */
 	template<IEEEMaskableFloat F, class Traits = typename IEEE754::FloatTraits<F>>
 	constexpr F max(F x, F y) noexcept {
@@ -382,7 +382,6 @@ namespace MathX::FPIntrinsic {
 
 	/*
 	 *  Returns the smaller value of x and y
-	 *  NaN and the sign of zeroes are respected
 	 */
 	template<IEEEMaskableFloat F, class Traits = typename IEEE754::FloatTraits<F>>
 	constexpr F min(F x, F y) noexcept {
@@ -442,7 +441,7 @@ namespace MathX::FPIntrinsic {
 		if (ex < t0) {
 
 			//Below one, discard to 0
-			return Bits::cast<F>(ix & Traits::SignMask);
+			return copySign(x, F(0));
 
 		} else if (ex < t1) {
 
@@ -587,10 +586,65 @@ namespace MathX::FPIntrinsic {
 
 
 	/*
-	 *  Rounds x to the nearest integer, i.e. the nearby integer that is closer to x
+	 *  Calculates the extrusion of x, i.e. the integer value that is less than or equal to x
 	 */
 	template<IEEEMaskableFloat F, class Traits = typename IEEE754::FloatTraits<F>>
-	constexpr F round(F x) noexcept {
+	constexpr F extrude(F x) noexcept {
+
+		if (!std::is_constant_evaluated()) {
+
+			//If we have fast ceil/floor, take these
+#ifdef ARC_TARGET_HAS_SSE4_1
+			if constexpr (CC::Equal<F, float> || CC::Equal<F, double>) {
+				return x >= 0 ? ceil(x) : floor(x);
+			}
+#endif
+
+		}
+
+		using T = typename Traits::T;
+
+		T ix = floatToInt(x);
+		T ex = ix & Traits::ExponentMask;
+
+		constexpr T t0 = Traits::ExponentBias << Traits::ExponentShift;
+		constexpr T t1 = (Traits::ExponentBias + Traits::MantissaSize) << Traits::ExponentShift;
+
+		if (ex < t0) {
+
+			//Below one, return +-O for zero, else +-1
+			return ix & ~Traits::SignMask ? copySign(x, F(1)) : x;
+
+		} else if (ex < t1) {
+
+			//Clear all fractional mantissa bits
+			T s = (t1 - ex) >> Traits::ExponentShift;
+			F f = Bits::cast<F>(Bits::mask(ix, s));
+
+			//Add/Subtract one if x wasn't an integer already
+			if (x != f) {
+				f += copySign(x, F(1));
+			}
+
+			return f;
+
+		} else if (isNaN(x)) {
+
+			return makeQuiet(x);
+
+		}
+
+		//x is already an integer
+		return x;
+
+	}
+
+
+	/*
+	 *  Rounds x to the nearest integer where halfway cases are rounded away from zero, i.e. 0.5 becomes 1.0, -0.5 becomes -1.0
+	 */
+	template<IEEEMaskableFloat F, class Traits = typename IEEE754::FloatTraits<F>>
+	constexpr F roundHalfAwayFromZero(F x) noexcept {
 
 		using T = typename Traits::T;
 
@@ -624,19 +678,19 @@ namespace MathX::FPIntrinsic {
 	}
 
 
-	template<Round R, IEEEMaskableFloat F, class Traits = typename IEEE754::FloatTraits<F>>
-	constexpr F nearby(F x) noexcept {
+	template<RoundingMode R, IEEEMaskableFloat F, class Traits = typename IEEE754::FloatTraits<F>>
+	constexpr F round(F x) noexcept {
 
-		if constexpr (R == Round::Down) {
+		if constexpr (R == RoundingMode::Down) {
 			return floor(x);
-		} else if constexpr (R == Round::Up) {
+		} else if constexpr (R == RoundingMode::Up) {
 			return ceil(x);
-		} else if constexpr (R == Round::Near) {
-			return round(x);
-		} else if constexpr (R == Round::Zero) {
+		} else if constexpr (R == RoundingMode::Zero) {
 			return trunc(x);
-		} else if constexpr (R == Round::Even) {
-			//To be implemented
+		} else if constexpr (R == RoundingMode::Infinity) {
+			return extrude(x);
+		} else if constexpr (R == RoundingMode::NearestInf) {
+			return roundHalfAwayFromZero(x);
 		}
 
 	}
