@@ -19,7 +19,6 @@
 #include <cstdlib>
 
 
-
 #if defined(ARC_CMATH_CONSTEXPR_FIX) && ARC_CMATH_CONSTEXPR_FIX
 #define ARC_CMATH_CONSTEXPR constexpr
 #else
@@ -34,15 +33,6 @@ namespace Math {
 	constexpr double e = 2.7182818284590452353602875;
 	constexpr double epsilon = 0.000001;
 	constexpr double minEpsilon = 0.00000001;
-	
-	template<Float F> constexpr F nan_v = std::numeric_limits<F>::quiet_NaN();
-	template<Float F> constexpr F inf_v = std::numeric_limits<F>::infinity();
-
-	constexpr double nan = nan_v<double>;
-	constexpr double inf = inf_v<double>;
-
-	template<Arithmetic A>
-	using PromotedType = TT::Conditional<Equal<A, long double>, A, double>;
 
 	template<CC::Float F>
 	struct SplitFloat {
@@ -50,48 +40,25 @@ namespace Math {
 		F fractional;
 	};
 
-
-	template<CC::Float F> constexpr bool isNaN(F);
-	template<CC::Float F> constexpr bool isInfinity(F);
 	template<CC::Arithmetic A> constexpr auto ceil(A value);
 	template<CC::Arithmetic A> constexpr auto floor(A value);
 	template<CC::Arithmetic A> constexpr auto trunc(A value);
 	template<CC::Arithmetic A> constexpr auto round(A value);
 
 
-	template<Arithmetic A, Float F = TT::ToSizedFloat<A>>
-	constexpr F toDegrees(A radians) noexcept {
-		return radians * F(180) / pi;
+	constexpr double toDegrees(double radians) noexcept {
+		return radians * 180.0 / pi;
 	}
 
-	template<Arithmetic A, Float F = TT::ToSizedFloat<A>>
-	constexpr F toRadians(A degrees) noexcept {
-		return degrees * pi / F(180);
+	constexpr double toRadians(double degrees) noexcept {
+		return degrees * pi / 180.0;
 	}
 
 	template<CC::Arithmetic A>
 	constexpr auto abs(A value) {
 
 		if (std::is_constant_evaluated()) {
-
-			if constexpr (!Float<A>) {
-			
-				return value < A(0) ? -value : value;
-
-			} else {
-
-				if (value == A(0)) {
-					return A(0);
-				} else if (Math::isInfinity(value)) {
-					return inf;
-				} else if (Math::isNaN(value)) {
-					return nan;
-				} else {
-					return value < A(0) ? -value : value;
-				}
-
-			}
-
+			return value == A(0) ? A(0) : (value < A(0) ? -value : value);
 		}
 
 		if constexpr (CC::UnsignedType<A>) {
@@ -243,11 +210,6 @@ namespace Math {
 	}
 
 	template<CC::Arithmetic A>
-	inline auto signbit(A value) noexcept {
-		return std::signbit(value);
-	}
-
-	template<CC::Arithmetic A>
 	constexpr auto copysign(A value, A sgn) noexcept {
 
 		if constexpr (std::is_constant_evaluated()) {
@@ -258,15 +220,10 @@ namespace Math {
 
 	}
 
-	template<CC::Integral I> constexpr bool isInfinity(I) 			{ return false; }
-	template<CC::Integral I> constexpr bool isPositiveInfinity(I) 	{ return false; }
-	template<CC::Integral I> constexpr bool isNegativeInfinity(I) 	{ return false; }
-	template<CC::Integral I> constexpr bool isNaN(I) 				{ return false; }
-
 	template<CC::Float F>
 	constexpr bool isInfinity(F value) {
 
-		if (std::is_constant_evaluated()) {
+		if (std::is_constant_evaluated() && std::numeric_limits<F>::has_infinity()) {
 			return value == std::numeric_limits<F>::infinity() || value == -std::numeric_limits<F>::infinity();
 		}
 
@@ -277,7 +234,7 @@ namespace Math {
 	template<CC::Float F>
 	constexpr bool isPositiveInfinity(F value) {
 
-		if (std::is_constant_evaluated()) {
+		if (std::is_constant_evaluated() && std::numeric_limits<F>::has_infinity()) {
 			return value == std::numeric_limits<F>::infinity();
 		}
 
@@ -288,7 +245,7 @@ namespace Math {
 	template<CC::Float F>
 	constexpr bool isNegativeInfinity(F value) {
 
-		if (std::is_constant_evaluated()) {
+		if (std::is_constant_evaluated() && std::numeric_limits<F>::has_infinity()) {
 			return value == -std::numeric_limits<F>::infinity();
 		}
 
@@ -298,36 +255,12 @@ namespace Math {
 
 	template<CC::Float F>
 	constexpr bool isNaN(F value) {
-
-		if (std::is_constant_evaluated()) {
-			return value != value;
-		}
-
 		return std::isnan(value);
-
 	}
 
 	template<CC::Arithmetic A>
 	ARC_CMATH_CONSTEXPR auto sin(A radians) {
-/*
-		if (std::is_constant_evaluated()) {
-
-			using F = PromotedType<A>;
-			F v = F(radians);
-
-			if (v == 0) {
-				return radians;
-			} else if (isInfinity(v) || isNaN(v)) {
-				return nan;
-			} else {
-				return v * (1 - v * v * (1 / F(6) - v * v * (1 / F(120) - v * v * (1 / F(720 * 7) - v * v * (1 / F(720 * 7 * 8 * 9) - v * v / F(720 * 7 * 8 * 9 * 10 * 11))))));
-				//return v - v * v * v / F(6) + v * v * v * v * v / F(120) - v * v * v * v * v * v * v / F(720 * 7) + v * v * v * v * v * v * v * v * v / F(720 * 7 * 8 * 9) - v * v * v * v * v * v * v * v * v * v * v / F(720 * 7 * 8 * 9 * 10 * 11);
-			}
-
-		}
-*/
 		return std::sin(radians);
-
 	}
 
 	template<CC::Arithmetic A>
@@ -410,13 +343,6 @@ namespace Math {
 
 	template<CC::Arithmetic A, CC::Arithmetic B>
 	ARC_CMATH_CONSTEXPR auto pow(A base, B exponent) {
-
-		if (std::is_constant_evaluated()) {
-
-			//PromotedType<decltype(base * exponent)> x;
-
-		}
-
 		return std::pow(base, exponent);
 	}
 

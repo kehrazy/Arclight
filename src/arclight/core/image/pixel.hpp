@@ -205,7 +205,7 @@ public:
 
 	using Format = PixelFormat<P>;
 	constexpr static u32 Size = Format::BytesPerPixel;
-	using PackedT = TT::UnsignedFromSize<Size>;
+	using PackedT = TT::UnsignedFromMinSize<Size>;
 	using PixelT = PixelStorage<P, ColorT>;
 
 	constexpr PixelStorage() {
@@ -316,7 +316,7 @@ public:
 		}
 
 	}
-	
+
 	constexpr PackedT pack() const {
 
 		PackedT t = 0;
@@ -365,7 +365,7 @@ public:
 		r = Math::min(r, getMaxRed());
 		g = Math::min(g, getMaxGreen());
 		b = Math::min(b, getMaxBlue());
-		
+
 #ifdef ARC_PIXEL_EXACT
 		setRGB(static_cast<u32>(Math::round(r)), static_cast<u32>(Math::round(g)), static_cast<u32>(Math::round(b)));
 #else
@@ -594,11 +594,11 @@ class Colors
 	using PixelT = PixelType<P>;
 	using ColorT = typename PixelT::ColorType;
 	using Format = typename PixelT::Format;
-	
+
 	constexpr static PixelT construct(float r, float g, float b, float a) {
 
 		PixelT pixel;
-		
+
 		pixel.setRed	(r * PixelT::getMaxRed  ());
 		pixel.setGreen	(g * PixelT::getMaxGreen());
 		pixel.setBlue	(b * PixelT::getMaxBlue ());
@@ -652,7 +652,7 @@ private:
 #ifdef ARC_PIXEL_EXACT
 		return inBits ? static_cast<T>(Math::round(value * ((1 << outBits) - 1) / static_cast<float>((1 << inBits) - 1))) : 0;
 #else
-		return static_cast<TT::UnsignedFromSize<sizeof(T) + 1>>(value << outBits) >> inBits;
+		return static_cast<TT::UnsignedFromMinSize<sizeof(T) + 1>>(value << outBits) >> inBits;
 #endif
 
 	}
