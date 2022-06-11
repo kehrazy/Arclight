@@ -442,16 +442,31 @@ namespace Bits {
 
 	template<CC::Integer I>
 	constexpr I ones(SizeT n) noexcept {
-		return n >= bitCount<I>() ? allOnes<I>() : (I(1) << n) - 1;
+		return n >= bitCount<I>() ? allOnes<I>() : (static_cast<TT::MakeUnsigned<I>>(1) << n) - 1;
+	}
+
+	template<CC::Integer I>
+	constexpr I createMask(SizeT start) noexcept {
+		return static_cast<TT::MakeUnsigned<I>>(allOnes<I>()) << start;
+	}
+
+	template<CC::Integer I>
+	constexpr I createMask(SizeT start, SizeT count) noexcept {
+		return static_cast<TT::MakeUnsigned<I>>(ones<I>(count)) << start;
 	}
 
 	template<CC::Integer T>
-	constexpr T mask(T t, u32 start, u32 count) noexcept {
-		return t & ((count < bitCount<T>() ? (cast<TT::MakeUnsigned<T>>(T(1)) << count) - 1 : ~T(0)) << start);
+	constexpr T mask(T t, SizeT start) noexcept {
+		return t & createMask<T>(start);
 	}
 
 	template<CC::Integer T>
-	constexpr T clear(T t, u32 start, u32 count) noexcept {
+	constexpr T mask(T t, SizeT start, SizeT count) noexcept {
+		return t & createMask<T>(start, count);
+	}
+
+	template<CC::Integer T>
+	constexpr T clear(T t, SizeT start, SizeT count) noexcept {
 		return t & ~mask(t, start, count);
 	}
 
