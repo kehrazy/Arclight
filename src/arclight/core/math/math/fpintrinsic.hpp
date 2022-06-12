@@ -782,4 +782,35 @@ namespace MathX::FPIntrinsic {
 
 	}
 
+
+	/*
+	 *  Returns the square root of x
+	 */
+	template<IEEEMaskableFloat F, class Traits = typename IEEE754::FloatTraits<F>>
+	constexpr F sqrt(F x) noexcept {
+
+		using T = typename Traits::T;
+
+		if (!std::is_constant_evaluated()) {
+
+			if constexpr (CC::Equal<F, float>) {
+
+#ifdef ARC_TARGET_HAS_SSE
+				__m128 v = _mm_set_ss(x);
+				return _mm_cvtss_f32(_mm_sqrt_ss(v));
+#endif
+
+			} else if constexpr (CC::Equal<F, double>) {
+
+#ifdef ARC_TARGET_HAS_SSE2
+				__m128d v = _mm_set_sd(x);
+				return _mm_cvtsd_f64(_mm_sqrt_sd(v, v));
+#endif
+
+			}
+
+		}
+
+	}
+
 }
