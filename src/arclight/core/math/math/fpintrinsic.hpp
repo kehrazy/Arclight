@@ -33,6 +33,15 @@ namespace MathX::FPIntrinsic {
 	};
 
 
+	enum class Category {
+		Zero,
+		Subnormal,
+		Normal,
+		Infinity,
+		NaN
+	};
+
+
 	namespace IEEE754 {
 
 		template<SizeT Size>
@@ -120,8 +129,8 @@ namespace MathX::FPIntrinsic {
 			template<IEEEFloat F> constexpr inline F nInf = -std::numeric_limits<F>::infinity();
 			template<IEEEFloat F> constexpr inline F qNaN = std::numeric_limits<F>::quiet_NaN();
 			template<IEEEFloat F> constexpr inline F sNaN = std::numeric_limits<F>::signaling_NaN();
-			template<IEEEFloat F> constexpr inline F pZero = +0.0L;
-			template<IEEEFloat F> constexpr inline F nZero = -0.0L;
+			template<IEEEFloat F> constexpr inline F pZero = 0;
+			template<IEEEFloat F> constexpr inline F nZero = Bits::cast<F>(IEEE754::FloatTraits<F>::SignMask);
 
 		}
 
@@ -496,7 +505,7 @@ namespace MathX::FPIntrinsic {
 		if (ex < t0) {
 
 			//Below one, return -0 for negatives, 0 for 0 and 1 for positives
-			return ix & Traits::SignMask ? -0 : (ix == 0 ? 0 : 1);
+			return ix & Traits::SignMask ? IEEE754::Constants::nZero<F> : (ix == 0 ? 0 : 1);
 
 		} else if (ex < t1) {
 
@@ -558,7 +567,7 @@ namespace MathX::FPIntrinsic {
 		if (ex < t0) {
 
 			//Below one, return -1 for negatives, -0 for -0 and 0 for positives
-			return ix & Traits::SignMask ? (x == 0 ? -0 : -1) : 0;
+			return ix & Traits::SignMask ? (x == 0 ? IEEE754::Constants::nZero<F> : -1) : 0;
 
 		} else if (ex < t1) {
 
@@ -586,7 +595,7 @@ namespace MathX::FPIntrinsic {
 
 
 	/*
-	 *  Calculates the extrusion of x, i.e. the integer value that is less than or equal to x
+	 *  Calculates the extrusion of x, i.e. the integer value that is x rounded towards signed infinity
 	 */
 	template<IEEEMaskableFloat F, class Traits = typename IEEE754::FloatTraits<F>>
 	constexpr F extrude(F x) noexcept {
@@ -691,6 +700,84 @@ namespace MathX::FPIntrinsic {
 			return extrude(x);
 		} else if constexpr (R == RoundingMode::NearestInf) {
 			return roundHalfAwayFromZero(x);
+		}
+
+	}
+
+
+	/*
+	 *  Returns the next representable floating point value
+	 */
+	template<IEEEMaskableFloat F, class Traits = typename IEEE754::FloatTraits<F>>
+	constexpr F nextFloat(F x) noexcept {
+
+		using T = typename Traits::T;
+
+		T ix = floatToInt(x);
+
+		if (isNaN(x)) {
+			return x;
+		}
+
+		if (ix & Traits::SignMask) {
+			return ix == Traits::SignMask ? 0 : Bits::cast<F>(ix - 1);
+		} else {
+			return Bits::cast<F>(ix + 1);
+		}
+
+	}
+
+
+	/*
+	 *  Returns the previous representable floating point value
+	 */
+	template<IEEEMaskableFloat F, class Traits = typename IEEE754::FloatTraits<F>>
+	constexpr F prevFloat(F x) noexcept {
+
+		using T = typename Traits::T;
+
+		T ix = floatToInt(x);
+
+		if (isNaN(x)) {
+			return x;
+		}
+
+		if (ix & Traits::SignMask) {
+			return Bits::cast<F>(ix + 1);
+		} else {
+			return ix == 0 ? IEEE754::Constants::nZero<F> : Bits::cast<F>(ix - 1);
+		}
+
+	}
+
+
+	/*
+	 *  Classifies x into one of 5 categories: Zero, Subnormal, Normal, Infinity and NaN
+	 */
+	template<IEEEMaskableFloat F, class Traits = typename IEEE754::FloatTraits<F>>
+	constexpr Category classify(F x) noexcept {
+
+		using T = typename Traits::T;
+
+		if (x == 0) {
+			return Category::Zero;
+		}
+
+		T ix = floatToInt(x);
+		T ex = (ix & Traits::ExponentMask) >> Traits::ExponentShift;
+
+		if (!isSpecialValue(x)) {
+
+			return (ix & Traits::ExponentMask) >> Traits::ExponentShift ? Category::Normal : Category::Subnormal;
+
+		} else {
+
+			if (isNaN(x)) {
+				return Category::NaN;
+			} else {
+				return Category::Infinity;
+			}
+
 		}
 
 	}
