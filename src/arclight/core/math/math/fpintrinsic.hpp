@@ -155,6 +155,11 @@ namespace MathX::FPIntrinsic {
 	}
 
 	template<IEEEMaskableFloat F, class Traits = typename IEEE754::FloatTraits<F>>
+	constexpr bool isNormal(F f) noexcept {
+		return ((floatToInt(f) - (typename Traits::T(1) << Traits::ExponentShift)) & ~Traits::SignMask) < (Traits::ExponentMask - (typename Traits::T(1) << Traits::ExponentShift));
+	}
+
+	template<IEEEMaskableFloat F, class Traits = typename IEEE754::FloatTraits<F>>
 	constexpr bool isZero(F f) noexcept {
 		return (floatToInt(f) & ~Traits::SignMask) == 0;
 	}
@@ -752,6 +757,37 @@ namespace MathX::FPIntrinsic {
 
 
 	/*
+	 *  Returns the distance between two floating point values, in ULPs. If one operand is NaN, -1 is returned.
+	 */
+	template<IEEEMaskableFloat F, class Traits = typename IEEE754::FloatTraits<F>>
+	constexpr typename Traits::T ulpDistance(F x, F y) noexcept {
+
+		using T = typename Traits::T;
+
+		T ix = floatToInt(x);
+		T iy = floatToInt(y);
+
+		if (isNaN(x) || isNaN(y)) {
+			return -1;
+		}
+
+		if ((ix ^ iy) & Traits::SignMask) {
+
+			//We have different signs
+			return ulpDistance(x, copySign(x, IEEE754::Constants::pZero<F>)) + ulpDistance(y, copySign(y, IEEE754::Constants::pZero<F>)) + 1;
+
+		}
+
+		if (ix >= iy) {
+			return ix - iy;
+		} else {
+			return iy - ix;
+		}
+
+	}
+
+
+	/*
 	 *  Classifies x into one of 5 categories: Zero, Subnormal, Normal, Infinity and NaN
 	 */
 	template<IEEEMaskableFloat F, class Traits = typename IEEE754::FloatTraits<F>>
@@ -784,12 +820,48 @@ namespace MathX::FPIntrinsic {
 
 
 	/*
+	 *  Returns the fused multiply-add operation a * b + c, rounded only once at the end
+	 */
+	template<IEEEMaskableFloat F, class Traits = typename IEEE754::FloatTraits<F>>
+	constexpr F fma(F a, F b, F c) noexcept {
+
+		//TODO: Check if it has FMA
+		__m128 x = _mm_set_ss(a);
+		__m128 y = _mm_set_ss(b);
+		__m128 z = _mm_set_ss(c);
+		return _mm_cvtss_f32(_mm_fmadd_ss(x, y, z));
+
+	}
+
+
+	/*
+	 *  Returns the inverse square root of x
+	 */
+	template<IEEEMaskableFloat F, class Traits = typename IEEE754::FloatTraits<F>>
+	constexpr F invsqrt(F x) noexcept {
+
+		using T = typename Traits::T;
+
+		T ix = floatToInt(x);
+		ix = 0x5F1FFFF9 - (ix >> 1);
+
+		F f = Bits::cast<F>(ix);
+		//f *= 0.703952253f * (2.38924456f - x * f * f );
+
+		return f;
+
+	}
+
+
+	/*
 	 *  Returns the square root of x
+	 *  The result is accurate to less than 0.5 ULP. Based on the inverse square root from Moroz, Samotyy et al [2021] and Markstein's residual algorithm for square roots [2000].
 	 */
 	template<IEEEMaskableFloat F, class Traits = typename IEEE754::FloatTraits<F>>
 	constexpr F sqrt(F x) noexcept {
 
 		using T = typename Traits::T;
+		using U = TT::MakeSigned<T>;
 
 		if (!std::is_constant_evaluated()) {
 
@@ -808,6 +880,73 @@ namespace MathX::FPIntrinsic {
 #endif
 
 			}
+
+		}
+
+
+		if (isNormal(x) && x > F(0)) {
+
+			//Reduce x
+			T ix = floatToInt(x);
+			T ex = (ix & Traits::ExponentMask) >> Traits::ExponentShift;
+			U sx = ex - Traits::ExponentBias;
+			U fx = sx / 2;
+			bool sb = !(ex & 1);
+			T nx = Traits::ExponentBias + (sx >= 0 ? sb : -sb);
+
+			ix = Bits::clear(ix, Traits::ExponentShift, Traits::ExponentSize);
+			ix |= nx << Traits::ExponentShift;
+			x = Bits::cast<F>(ix);
+
+			//Inverse approximation
+			F k1 = 2.2825186f;
+			F k2 = 2.2533049f;
+			ix = 0x5F1110A0 - (ix >> 1);
+			F f = Bits::cast<F>(ix);
+			F c = x * f * f;
+			f = f * (k1 - c * (k2 - c));
+			c = x * f;
+			c = fma(f, -c, 1.0f);
+			f = fma(f, 0.5f * c, f);
+
+			//Residual calculation
+			F square = f * f;
+			F error = fma(-x, square, 1.0f);
+			F improved = fma(fma(error, 0.375f, 0.5f), f * error, f);
+
+			//Square root transform
+			F sqroot = x * improved;
+			F residual = fma(sqroot, -sqroot, x);
+			F result = fma(residual, 0.5f * improved, sqroot);
+
+			//Reconstruct exponent
+			T iy = floatToInt(result);
+			iy += fx << Traits::ExponentShift;
+
+			return Bits::cast<F>(iy);
+
+		} else if (isNaN(x)) {
+
+			//Return qNaN
+			return IEEE754::Constants::qNaN<F>;
+
+		} else if (x < F(0)) {
+
+			//Return sNaN
+			return IEEE754::Constants::sNaN<F>;
+
+		} else if (isSpecialValueOrZero(x)) {
+
+			//Return 0 for 0 and +inf for +inf
+			return x;
+
+		} else {
+
+			//Subnormal case, call sqrt with transformed argument
+			constexpr F Bias = Bits::cast<F>(T(Traits::ExponentBias + (Traits::ExponentBias + 1) / 2) << Traits::ExponentShift);
+			constexpr F SqrtBias = Bits::cast<F>(T(Traits::ExponentBias - (Traits::ExponentBias + 1) / 4) << Traits::ExponentShift);
+
+			return SqrtBias * sqrt(x * Bias);
 
 		}
 
