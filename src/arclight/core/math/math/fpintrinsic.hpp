@@ -826,29 +826,26 @@ namespace MathX::FPIntrinsic {
 	constexpr F fma(F a, F b, F c) noexcept {
 
 		//TODO: Check if it has FMA
-		__m128 x = _mm_set_ss(a);
-		__m128 y = _mm_set_ss(b);
-		__m128 z = _mm_set_ss(c);
-		return _mm_cvtss_f32(_mm_fmadd_ss(x, y, z));
 
-	}
+		if (!std::is_constant_evaluated()) {
 
+			if constexpr (CC::Equal<F, float>) {
 
-	/*
-	 *  Returns the inverse square root of x
-	 */
-	template<IEEEMaskableFloat F, class Traits = typename IEEE754::FloatTraits<F>>
-	constexpr F invsqrt(F x) noexcept {
+				__m128 x = _mm_set_ss(a);
+				__m128 y = _mm_set_ss(b);
+				__m128 z = _mm_set_ss(c);
+				return _mm_cvtss_f32(_mm_fmadd_ss(x, y, z));
 
-		using T = typename Traits::T;
+			} else if constexpr (CC::Equal<F, double>) {
 
-		T ix = floatToInt(x);
-		ix = 0x5F1FFFF9 - (ix >> 1);
+				__m128d x = _mm_set_sd(a);
+				__m128d y = _mm_set_sd(b);
+				__m128d z = _mm_set_sd(c);
+				return _mm_cvtsd_f64(_mm_fmadd_sd(x, y, z));
 
-		F f = Bits::cast<F>(ix);
-		//f *= 0.703952253f * (2.38924456f - x * f * f );
+			}
 
-		return f;
+		}
 
 	}
 
@@ -862,6 +859,8 @@ namespace MathX::FPIntrinsic {
 
 		using T = typename Traits::T;
 		using U = TT::MakeSigned<T>;
+
+		static_assert(!CC::Equal<F, long double>, "sqrt for long double not supported");
 
 		if (!std::is_constant_evaluated()) {
 
@@ -883,7 +882,6 @@ namespace MathX::FPIntrinsic {
 
 		}
 
-
 		if (isNormal(x) && x > F(0)) {
 
 			//Reduce x
@@ -899,25 +897,50 @@ namespace MathX::FPIntrinsic {
 			x = Bits::cast<F>(ix);
 
 			//Inverse approximation
-			F k1 = 2.2825186f;
-			F k2 = 2.2533049f;
-			ix = 0x5F1110A0 - (ix >> 1);
-			F f = Bits::cast<F>(ix);
-			F c = x * f * f;
-			f = f * (k1 - c * (k2 - c));
-			c = x * f;
-			c = fma(f, -c, 1.0f);
-			f = fma(f, 0.5f * c, f);
+			F f;
+
+			if constexpr (CC::Equal<F, float>) {
+
+				F k1 = 2.2825186f;
+				F k2 = 2.2533049f;
+
+				ix = 0x5F1110A0 - (ix >> 1);
+				f = Bits::cast<F>(ix);
+
+				F c = x * f * f;
+				f = f * (k1 - c * (k2 - c));
+				c = x * f;
+				c = fma(f, -c, 1.0f);
+				f = fma(f, 0.5f * c, f);
+
+			} else if constexpr (CC::Equal<F, double>) {
+
+				F k1 = 2.28251863069107890;
+				F k2 = 2.25330495841181303;
+				F k3 = 1.500000000301525;
+
+				ix = 0x5FE222142565D5C2 - (ix >> 1);
+				f = Bits::cast<F>(ix);
+
+				F c = x * f * f;
+				f = f * (k1 - c * (k2 - c));
+				F h = 0.5 * x;
+				f = f * (k3 - h * f * f);
+				c = h * f;
+				c = fma(f, -c, 0.5);
+				f = fma(f, c, f);
+
+			}
 
 			//Residual calculation
 			F square = f * f;
-			F error = fma(-x, square, 1.0f);
-			F improved = fma(fma(error, 0.375f, 0.5f), f * error, f);
+			F error = fma(-x, square, F(1.0));
+			F improved = fma(fma(error, F(0.375), F(0.5)), f * error, f);
 
 			//Square root transform
 			F sqroot = x * improved;
 			F residual = fma(sqroot, -sqroot, x);
-			F result = fma(residual, 0.5f * improved, sqroot);
+			F result = fma(residual, F(0.5) * improved, sqroot);
 
 			//Reconstruct exponent
 			T iy = floatToInt(result);
