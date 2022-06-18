@@ -9,7 +9,7 @@
 #pragma once
 
 #include "types.hpp"
-#include "common/concepts.hpp"
+#include "concepts.hpp"
 
 #include <type_traits>
 
@@ -98,6 +98,7 @@ namespace TT {
 
 	template<class> struct TypeTag;
 
+
 	/* Implementation of new TTs */
 	namespace Detail {
 
@@ -111,29 +112,25 @@ namespace TT {
 			constexpr static bool Value = (std::is_same_v<T, Pack> && ...);
 		};
 
-		template<CC::Arithmetic A>
+
+		template<CC::Arithmetic T>
 		struct ToInteger {
 
-			constexpr static SizeT Size = sizeof(A);
-
-			using Type =    TT::Conditional<CC::Integer<A>, A,
-							TT::Conditional<Size <= 4, i32,
-							TT::Conditional<Size <= 8, i64, imax>>>;
+			using Type =    TT::Conditional<CC::Integral<T>, T,
+							TT::Conditional<CC::Equal<T, float>, i32, i64>>;
 
 		};
 
-		template<CC::Arithmetic A>
+		template<CC::Arithmetic T>
 		struct ToFloat {
 
-			constexpr static SizeT Size = sizeof(A);
+			constexpr static SizeT Size = sizeof(T);
 
-			using Type =	TT::Conditional<CC::Float<A>, A,
-							TT::Conditional<Size <= sizeof(float), float,
-							TT::Conditional<Size <= sizeof(double), double, long double>>>;
+			using Type =	TT::Conditional<CC::Float<T>, T,
+							TT::Conditional<Size <= 2, float,
+							TT::Conditional<Size <= 4, double, long double>>>;
 
 		};
-		template<> struct ToFloat<u64> { using Type = double; };
-		template<> struct ToFloat<i64> { using Type = double; };
 
 		template<class T>
 		concept HasExposedInnerType = requires { T::Type; };
@@ -176,29 +173,89 @@ namespace TT {
 		};
 
 		template<SizeT Size>
-		struct UnsignedFromSize {
-
-			static_assert(Size <= sizeof(umax), "Cannot supply unsigned type greater than sizeof(umax)");
-
-			using Type =    TT::Conditional<Size == 1, u8,
-							TT::Conditional<Size == 2, u16,
-							TT::Conditional<Size <= 4, u32,
-							TT::Conditional<Size <= 8, u64, umax>>>>;
-
+		struct HasSizedIntegral {
+			constexpr static bool Value = Size == 1 || Size == 2 || Size == 4 || Size == 8;
 		};
 
 		template<SizeT Size>
-		struct SignedFromSize {
+		struct HasSizedMinIntegral {
+			constexpr static bool Value = Size <= 8;
+		};
 
-			static_assert(Size <= sizeof(imax), "Cannot supply signed type greater than sizeof(imax)");
+		template<SizeT Size>
+		struct HasSizedFloat {
+			constexpr static bool Value = Size == sizeof(float) || Size == sizeof(double) || Size == sizeof(long double);
+		};
 
-			using Type =    TT::Conditional<Size == 1, i8,
-							TT::Conditional<Size == 2, i16,
-							TT::Conditional<Size <= 4, i32,
-							TT::Conditional<Size <= 8, i64, imax>>>>;
+		template<SizeT Size>
+		struct HasSizedMinFloat {
+			constexpr static bool Value = Size <= sizeof(long double);
+		};
+
+
+		template<SizeT Size> requires HasSizedIntegral<Size>::Value
+		struct UnsignedFromSize {
+
+			using Type =    TT::Conditional<Size == 1, u8,
+							TT::Conditional<Size == 2, u16,
+							TT::Conditional<Size == 4, u32, u64>>>;
 
 		};
 
+		template<SizeT Size> requires HasSizedIntegral<Size>::Value
+		struct SignedFromSize {
+			using Type = MakeSigned<typename UnsignedFromSize<Size>::Type>;
+		};
+
+		template<SizeT Size> requires HasSizedMinIntegral<Size>::Value
+		struct UnsignedFromMinSize {
+
+			using Type =    TT::Conditional<Size <= 1, u8,
+							TT::Conditional<Size <= 2, u16,
+							TT::Conditional<Size <= 4, u32, u64>>>;
+
+		};
+
+		template<SizeT Size> requires HasSizedMinIntegral<Size>::Value
+		struct SignedFromMinSize {
+			using Type = MakeSigned<typename UnsignedFromMinSize<Size>::Type>;
+		};
+
+
+		template<CC::Arithmetic T> requires (CC::Integral<T> || HasSizedIntegral<sizeof(T)>::Value)
+		struct ToSizedInteger {
+			using Type = TT::Conditional<CC::Integral<T>, T, typename SignedFromSize<sizeof(T)>::Type>;
+		};
+
+		template<CC::Arithmetic T> requires (CC::Float<T> || HasSizedFloat<sizeof(T)>::Value)
+		struct ToSizedFloat {
+
+			using Type =    TT::Conditional<CC::Float<T>, T,
+							TT::Conditional<sizeof(T) == sizeof(float), float,
+							TT::Conditional<sizeof(T) == sizeof(double), double, long double>>>;
+
+		};
+
+
+		template<CC::Arithmetic T> struct BiggerType { static_assert("Illegal type"); };
+		template<> struct BiggerType<i8>    { using Type = i16; };
+		template<> struct BiggerType<i16>   { using Type = i32; };
+		template<> struct BiggerType<i32>   { using Type = i64; };
+		template<> struct BiggerType<u8>    { using Type = u16; };
+		template<> struct BiggerType<u16>   { using Type = u32; };
+		template<> struct BiggerType<u32>   { using Type = u64; };
+		template<> struct BiggerType<char>  { using Type = TT::Conditional<CC::SignedType<char>, i16, u16>; };
+
+		template<CC::Arithmetic T> struct SmallerType { static_assert("Illegal type"); };
+		template<> struct SmallerType<i16>  { using Type = i8;  };
+		template<> struct SmallerType<i32>  { using Type = i16; };
+		template<> struct SmallerType<i64>  { using Type = i32; };
+		template<> struct SmallerType<u16>  { using Type = u8;  };
+		template<> struct SmallerType<u32>  { using Type = u16; };
+		template<> struct SmallerType<u64>  { using Type = u32; };
+
+		template<class T> concept HasBiggerType = CC::Arithmetic<T> && requires { BiggerType<T>::Type; };
+		template<class T> concept HasSmallerType = CC::Arithmetic<T> && requires { SmallerType<T>::Type; };
 
 		template<SizeT N, class T, class... Pack>
 		struct PackHelper {
@@ -227,6 +284,15 @@ namespace TT {
 
 		template<SizeT N, class... Pack>
 		constexpr inline SizeT SizeofN = sizeof(typename NthPackType<N, Pack...>::Type);
+
+
+		template<class T>
+		struct ArraySizeHelper {};
+
+		template<class T, SizeT N>
+		struct ArraySizeHelper<T[N]> {
+			static constexpr SizeT Size = N;
+		};
 
 
 		template<class T>
@@ -260,7 +326,12 @@ namespace TT {
 	using ConditionalConst = std::conditional_t<B, const T, T>;
 
 
-	/* Converts an Integer type to a roughly equivalent Float type */
+	/* Converts an Integer/Float type to a Float/Integer type */
+	/*
+	 *  It is guaranteed that any integer value is representable through the given float type,
+	 *  However, the same cannot hold true for float -> int.
+	 *  Therefore, the integer type that covers ~75% of all (usable) integer float values is provided instead.
+	 */
 	template<CC::Arithmetic A>
 	using ToInteger = typename Detail::ToInteger<A>::Type;
 
@@ -268,12 +339,75 @@ namespace TT {
 	using ToFloat = typename Detail::ToFloat<A>::Type;
 
 
-	/* Defines the corresponding integral type fitting at least the given amount of bytes */
+	/* Converts an Integer/Float type to a Float/Integer type given that the resulting type has the same size as the original type */
+	template<CC::Arithmetic A>
+	using ToSizedInteger = typename Detail::ToSizedInteger<A>::Type;
+
+	template<CC::Arithmetic A>
+	using ToSizedFloat = typename Detail::ToSizedFloat<A>::Type;
+
+
+	/* Tells whether the given type has a sized equivalent */
+	template<CC::Arithmetic A>
+	constexpr inline bool HasSizedInteger = Detail::HasSizedIntegral<sizeof(A)>::Value;
+
+	template<CC::Arithmetic A>
+	constexpr inline bool HasSizedFloat = Detail::HasSizedFloat<sizeof(A)>::Value;
+
+
+	/* Defines the corresponding integral type with the given amount of bytes */
 	template<SizeT Size>
 	using UnsignedFromSize = typename Detail::UnsignedFromSize<Size>::Type;
 
 	template<SizeT Size>
 	using SignedFromSize = typename Detail::SignedFromSize<Size>::Type;
+
+
+	/* Defines the corresponding integral type fitting at least the given amount of bytes */
+	template<SizeT Size>
+	using UnsignedFromMinSize = typename Detail::UnsignedFromMinSize<Size>::Type;
+
+	template<SizeT Size>
+	using SignedFromMinSize = typename Detail::SignedFromMinSize<Size>::Type;
+
+
+	/* Extracts the size of an array */
+	template<class T>
+	constexpr inline SizeT ArraySize = Detail::ArraySizeHelper<T>::Size;
+
+
+	/* Returns the smaller/bigger power of two type */
+	template<CC::Arithmetic T>
+	using BiggerType = typename Detail::BiggerType<T>::Type;
+
+	template<CC::Arithmetic T>
+	using SmallerType = typename Detail::SmallerType<T>::Type;
+
+
+	/* True if the given type has a smaller/bigger power of two type */
+	template<CC::Arithmetic T>
+	constexpr inline bool HasBiggerType = Detail::HasBiggerType<T>;
+
+	template<CC::Arithmetic T>
+	constexpr inline bool HasSmallerType = Detail::HasSmallerType<T>;
+
+
+	/* Selects a type depending on the size */
+	template<class T, class U>
+	using MinType = TT::Conditional<sizeof(T) <= sizeof(U), T, U>;
+
+	template<class T, class U>
+	using MaxType = TT::Conditional<sizeof(T) >= sizeof(U), T, U>;
+
+
+	/* Returns the type after arithmetic promotion */
+	template<CC::Arithmetic T>
+	using PromotedType = decltype(T(0) + T(0));
+
+
+	/* Returns the common type of multiple types */
+	template<class... T>
+	using CommonType = std::common_type_t<T...>;
 
 
 	/* Extracts the arithmetic type from a mathematical construct T or uses the arithmetic type T */

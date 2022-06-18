@@ -148,7 +148,7 @@ namespace CC {
 	concept SignedType = std::is_signed_v<T>;
 
 	template<class T>
-	concept UnsignedType = std::is_unsigned_v<T>;
+	concept UnsignedType = std::is_unsigned_v<T> && !Equal<T, bool>;
 
 
 	template<class T>
@@ -197,6 +197,9 @@ namespace CC {
 
 	template<class F, class R, class... A>
 	concept Returns = Invocable<F> && Equal<std::invoke_result_t<F, A...>, R>;
+
+	template<class T>
+	concept Exists = (sizeof(T), true);
 
 	template<class T>
 	concept Shape = requires(T s) { s.area(); };

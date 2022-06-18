@@ -337,7 +337,7 @@ project (${PROJECT_NAME})
 		# Force Unicode
 		add_compile_definitions(UNICODE _UNICODE)
 
-		list(APPEND APPLICATION_LIBS ComCtl32.lib)
+		list(APPEND APPLICATION_LIBS ComCtl32.lib Bcrypt.lib)
 
 	endif()
 
