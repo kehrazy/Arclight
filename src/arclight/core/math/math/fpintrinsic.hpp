@@ -892,7 +892,7 @@ namespace MathX::FPIntrinsic {
 			bool sb = !(ex & 1);
 			T nx = Traits::ExponentBias + (sx >= 0 ? sb : -sb);
 
-			ix = Bits::clear(ix, Traits::ExponentShift, Traits::ExponentSize);
+			ix &= ~Traits::ExponentMask;
 			ix |= nx << Traits::ExponentShift;
 			x = Bits::cast<F>(ix);
 
